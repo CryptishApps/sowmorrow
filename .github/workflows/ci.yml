@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: true
           persist-credentials: false
 
       - uses: actions/setup-node@v4
@@ -79,7 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: true
           persist-credentials: false
 
       - uses: actions/setup-node@v4
@@ -122,7 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: true
           persist-credentials: false
 
       - uses: foundry-rs/foundry-toolchain@v1
@@ -142,7 +142,8 @@ jobs:
         run: forge --version | grep -F "${{ env.FOUNDRY_VERSION }}"
 
       - run: forge fmt --root contracts --check
-      - run: forge build --root contracts --sizes
+      - name: Build and measure the deployable vault
+        run: forge build --root contracts contracts/src/SowmorrowVault.sol --sizes
 
       - name: Run the reference suite with the CI fuzz and invariant budget
         env:
@@ -167,7 +168,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: true
           persist-credentials: false
 
       - uses: actions/setup-node@v4

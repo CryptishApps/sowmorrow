@@ -27,7 +27,7 @@ The app starts in a safe read-only preview. Wallet writes remain unavailable unt
 Install exact npm dependencies and create local configuration:
 
 ```sh
-git submodule update --init --recursive
+git submodule update --init
 npm ci
 cp .env.local.example .env.local
 npm run dev
