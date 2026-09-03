@@ -151,7 +151,7 @@ jobs:
         run: forge test --root contracts -vvv
 
       - name: Measure vault coverage
-        run: forge coverage --root contracts --match-contract SowmorrowVaultTest --report lcov --report-file contracts/coverage.lcov
+        run: forge coverage --root contracts --match-contract SowmorrowVaultTest --report lcov --report-file coverage.lcov
 
       - name: Upload Solidity coverage
         if: always()
