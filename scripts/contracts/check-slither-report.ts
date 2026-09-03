@@ -33,6 +33,7 @@ const expected = new Map([
   ["reentrancy-balance|High|Medium|_claim(uint256,address)", 1],
   ["calls-loop|Low|Medium|_validateAsset(address)", 4],
   ["calls-loop|Low|Medium|_claim(uint256,address)", 3],
+  ["costly-loop|Informational|Medium|_setSupportedStock(address,bool,uint256)", 1],
   ["timestamp|Low|Medium|createGift(address,address,uint256,uint64,bytes32)", 1],
   ["timestamp|Low|Medium|_claim(uint256,address)", 1],
 ]);
