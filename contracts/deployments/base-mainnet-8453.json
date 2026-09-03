@@ -1,0 +1,30 @@
+{
+  "$schema": "./deployment-manifest.schema.json",
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "chainId": 8453,
+  "network": "base-mainnet",
+  "status": "pending",
+  "vaultAddress": null,
+  "deploymentBlock": null,
+  "runtimeBytecodeHash": null,
+  "owner": { "kind": "safe", "address": null },
+  "startPaused": true,
+  "expectedCreationPaused": null,
+  "catalogAddressSetSha256": "6f9668465af1f0f939d7c9e9c46fc0ad00eecd02782f1983a9f67bce87f7b92f",
+  "stocks": [
+    { "symbol": "AAPLc", "address": "0xb200000000000000000000C2e324d24d7eEcd1fb" },
+    { "symbol": "AMZNc", "address": "0xb200000000000000000000d9192b6B456483C2E8" },
+    { "symbol": "COINc", "address": "0xb200000000000000000000c85a31389D71F3ecfb" },
+    { "symbol": "CRCLc", "address": "0xB20000000000000000000019f6E7C675b73C2e4D" },
+    { "symbol": "GOOGLc", "address": "0xb2000000000000000000002D0BA3164cc74f58B7" },
+    { "symbol": "INTCc", "address": "0xB2000000000000000000004AFF16039bA04bdFBc" },
+    { "symbol": "METAc", "address": "0xb2000000000000000000008bC8786B856E61707C" },
+    { "symbol": "MSFTc", "address": "0xB200000000000000000000Ab99cFa739E253872B" },
+    { "symbol": "MSTRc", "address": "0xb2000000000000000000004884b426556b92883d" },
+    { "symbol": "NVDAc", "address": "0xb20000000000000000000078ee7ce2fE4908108C" },
+    { "symbol": "SNDKc", "address": "0xb200000000000000000000397293Cb8cda9a10c5" },
+    { "symbol": "SPCXc", "address": "0xb2000000000000000000007b9fcbd005511aCBd5" },
+    { "symbol": "TSLAc", "address": "0xb2000000000000000000001e800a7f5189430cD0" }
+  ]
+}

@@ -1,0 +1,296 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sky-deep: #1b3fae;
+  --color-sky: #2f6fdf;
+  --color-sky-horizon: #9fd0f7;
+  --color-cloud: #ffffff;
+  --color-cloud-shade: #cfe0ff;
+  --color-meadow-deep: #2a6b34;
+  --color-meadow: #56a53f;
+  --color-meadow-light: #9ad24f;
+  --color-meadow-glow: #d4ee8a;
+  --color-sun: #ffc03a;
+  --color-sun-deep: #f29a1c;
+  --color-poppy: #ef5a34;
+  --color-cream: #fff7e8;
+  --color-cream-deep: #f6e9d0;
+  --color-ink: #14361b;
+  --color-ink-soft: #4a6b52;
+  --color-bark: #6b4a2b;
+
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-nunito);
+  --font-mono: var(--font-jetbrains);
+
+  --shadow-card: 0 30px 60px -20px rgb(20 54 27 / 0.45), 0 12px 24px -12px rgb(20 54 27 / 0.3);
+  --shadow-button: 0 10px 24px -8px rgb(242 154 28 / 0.7), inset 0 1px 0 rgb(255 255 255 / 0.5);
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--color-sky-deep);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-variation-settings:
+    "opsz" 144,
+    "SOFT" 80,
+    "WONK" 1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.text-shadow-sky {
+  text-shadow:
+    0 2px 18px rgb(19 47 140 / 0.45),
+    0 1px 2px rgb(19 47 140 / 0.35);
+}
+
+.field {
+  width: 100%;
+  border-radius: 14px;
+  border: 1.5px solid color-mix(in oklab, var(--color-ink) 12%, transparent);
+  background: #fffdf8;
+  padding: 9px 13px;
+  font-size: 14.5px;
+  line-height: 1.3;
+  color: var(--color-ink);
+  outline: none;
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+}
+.field::placeholder {
+  color: color-mix(in oklab, var(--color-ink-soft) 55%, transparent);
+}
+.field:focus-visible {
+  border-color: var(--color-meadow);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-meadow) 22%, transparent);
+}
+
+.field:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.field-label {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.primary-button {
+  border-radius: 999px;
+  background: var(--color-meadow-deep);
+  color: var(--color-cream);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 800;
+  min-height: 42px;
+  padding: 10px 20px;
+  transition:
+    background-color 160ms,
+    opacity 160ms,
+    transform 160ms;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--color-ink);
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.primary-button:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--color-meadow) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.scroll-region {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-ink) 22%, transparent) transparent;
+}
+
+.stock-rail {
+  scrollbar-width: none;
+  overscroll-behavior-inline: contain;
+  touch-action: pan-x pan-y;
+  cursor: grab;
+  user-select: none;
+}
+
+.stock-rail:active {
+  cursor: grabbing;
+}
+
+.stock-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.rail-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 10;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  translate: 0 -50%;
+  place-items: center;
+  border: 1px solid color-mix(in oklab, var(--color-ink) 12%, transparent);
+  border-radius: 999px;
+  background: var(--color-cream);
+  box-shadow: 0 4px 14px rgb(20 54 27 / 0.18);
+  color: var(--color-ink);
+  font-size: 21px;
+  line-height: 1;
+}
+
+.rail-arrow:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--color-meadow) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.empty-state {
+  display: flex;
+  min-height: 190px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px dashed color-mix(in oklab, var(--color-ink) 16%, transparent);
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--color-cream-deep) 44%, transparent);
+  padding: 22px;
+  color: var(--color-ink-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+.gift-state {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gift-state-ready {
+  background: var(--color-sun);
+  color: var(--color-ink);
+}
+
+.gift-state-locked {
+  background: color-mix(in oklab, var(--color-sky) 12%, transparent);
+  color: var(--color-sky-deep);
+}
+
+.gift-state-claimed {
+  background: color-mix(in oklab, var(--color-ink) 8%, transparent);
+  color: var(--color-ink-soft);
+}
+
+.chip {
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in oklab, var(--color-ink) 12%, transparent);
+  background: #fffdf8;
+  padding: 5px 10px 5px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-ink);
+  cursor: pointer;
+  transition:
+    background 150ms,
+    border-color 150ms,
+    transform 150ms;
+}
+.chip:hover {
+  border-color: color-mix(in oklab, var(--color-meadow) 60%, transparent);
+}
+.chip[aria-pressed="true"] {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-cream);
+}
+.chip:focus-visible {
+  outline: 3px solid color-mix(in oklab, var(--color-meadow) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.tree-grow,
+.tree-sway,
+.tree-pulse {
+  transform-box: view-box;
+}
+.tree-grow {
+  animation: tree-grow 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.tree-sway {
+  animation: tree-sway 8s ease-in-out infinite;
+}
+.tree-pulse {
+  animation: tree-pulse 1.5s ease-out both;
+}
+@keyframes tree-grow {
+  from {
+    transform: scale(0.02);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes tree-sway {
+  0%,
+  100% {
+    transform: rotate(-0.45deg);
+  }
+  50% {
+    transform: rotate(0.45deg);
+  }
+}
+@keyframes tree-pulse {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  25% {
+    transform: rotate(-2deg) scale(1.04);
+  }
+  55% {
+    transform: rotate(1.6deg) scale(0.99);
+  }
+  80% {
+    transform: rotate(-0.8deg) scale(1.01);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-grow,
+  .tree-sway,
+  .tree-pulse {
+    animation: none;
+  }
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

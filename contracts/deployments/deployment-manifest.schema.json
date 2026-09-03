@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sowmorrow.example/schemas/deployment-manifest.json",
+  "title": "Sowmorrow deployment manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contractVersion",
+    "chainId",
+    "network",
+    "status",
+    "vaultAddress",
+    "deploymentBlock",
+    "runtimeBytecodeHash",
+    "owner",
+    "startPaused",
+    "expectedCreationPaused",
+    "catalogAddressSetSha256",
+    "stocks"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "contractVersion": { "const": "1.0.0" },
+    "chainId": { "enum": [31337, 84532, 8453] },
+    "network": { "enum": ["local", "base-sepolia", "base-mainnet"] },
+    "status": { "enum": ["pending", "active", "retired"] },
+    "vaultAddress": {
+      "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" }]
+    },
+    "deploymentBlock": {
+      "anyOf": [{ "type": "null" }, { "type": "integer", "minimum": 0 }]
+    },
+    "runtimeBytecodeHash": {
+      "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" }]
+    },
+    "owner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "address"],
+      "properties": {
+        "kind": { "enum": ["local-eoa", "test-safe", "safe"] },
+        "address": {
+          "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" }]
+        }
+      }
+    },
+    "startPaused": { "type": "boolean" },
+    "expectedCreationPaused": {
+      "anyOf": [{ "type": "null" }, { "type": "boolean" }]
+    },
+    "catalogAddressSetSha256": {
+      "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{64}$" }]
+    },
+    "stocks": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["symbol", "address"],
+        "properties": {
+          "symbol": { "type": "string", "minLength": 1 },
+          "address": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" }
+        }
+      }
+    }
+  }
+}

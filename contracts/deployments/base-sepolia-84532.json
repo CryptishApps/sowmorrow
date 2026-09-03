@@ -1,0 +1,16 @@
+{
+  "$schema": "./deployment-manifest.schema.json",
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "chainId": 84532,
+  "network": "base-sepolia",
+  "status": "pending",
+  "vaultAddress": null,
+  "deploymentBlock": null,
+  "runtimeBytecodeHash": null,
+  "owner": { "kind": "test-safe", "address": null },
+  "startPaused": false,
+  "expectedCreationPaused": null,
+  "catalogAddressSetSha256": null,
+  "stocks": []
+}

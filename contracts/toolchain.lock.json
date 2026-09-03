@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-09-03",
+  "solidity": "0.8.36",
+  "foundry": {
+    "version": "1.8.1",
+    "commit": "982849d3140c01fd3b72905759581a132df7aa98"
+  },
+  "baseNative": {
+    "repository": "ghcr.io/base/base-anvil",
+    "tag": "sha-2114980688558cbb2505fc42cb0f2b9e641cc8db",
+    "indexDigest": "sha256:d834bcd07858170c8803b1022f051fbcb346ccd8d033126cc683e357646278e4",
+    "baseCommit": "2114980688558cbb2505fc42cb0f2b9e641cc8db",
+    "baseAnvilCommit": "3983d1f5c13592c5074bb47df67fa58f1295d758",
+    "baseStdSmokeCommit": "4571b325c1b9c4d6e21c59d2b7f9b4b60f62ec7c",
+    "forgeVersion": "1.6.0-dev"
+  },
+  "libraries": {
+    "forge-std": {
+      "version": "1.16.2",
+      "commit": "bf647bd6046f2f7da30d0c2bf435e5c76a780c1b",
+      "treeSha256": "44906844b05c224dba23bd5f5ebacd6ceace5a2ac8a21fca1034e1ddcdbfb9e0"
+    },
+    "base-std": {
+      "version": "1.0.0",
+      "commit": "4658f1b7b54ccc61b036adc32830594018ea507e",
+      "archiveSha256": "cc9edfcb93c6306aaa817e3e3132a327e890f0521b725020f41f9307728c32f0",
+      "treeSha256": "c62afc58108abe4651862f9c6ada6cd4027cabb528d6aa201ca6a3be17d0b677"
+    },
+    "openzeppelin-contracts": {
+      "version": "5.6.1",
+      "commit": "5fd1781b1454fd1ef8e722282f86f9293cacf256",
+      "archiveSha256": "6542272013ef3322d86f1eb6b47fc94ae1a95992169a5b3e160af189989187a4",
+      "treeSha256": "9436a4b3a586a31f614db5ace5c058077366c0c60b84a86462e36da596855ed5"
+    }
+  },
+  "security": {
+    "slither": {
+      "version": "0.11.6",
+      "wheelSha256": "01f809198d3f171e2d768569c0054c96af5736614e183c64f42c9b51636c33c1"
+    },
+    "echidna": {
+      "version": "2.3.3",
+      "macosArm64ArchiveSha256": "8e16a43d8c37b74365ef259ea986e074b8a717309f770c7ff3d1f9fb891a7902"
+    }
+  }
+}

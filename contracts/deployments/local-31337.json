@@ -1,0 +1,19 @@
+{
+  "$schema": "./deployment-manifest.schema.json",
+  "schemaVersion": 1,
+  "contractVersion": "1.0.0",
+  "chainId": 31337,
+  "network": "local",
+  "status": "pending",
+  "vaultAddress": null,
+  "deploymentBlock": null,
+  "runtimeBytecodeHash": null,
+  "owner": {
+    "kind": "local-eoa",
+    "address": null
+  },
+  "startPaused": false,
+  "expectedCreationPaused": null,
+  "catalogAddressSetSha256": null,
+  "stocks": []
+}

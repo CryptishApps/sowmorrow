@@ -1,0 +1,14 @@
+testMode: property
+testLimit: 2500
+seqLen: 100
+timeout: 180
+workers: 1
+allContracts: true
+seed: 1326304916
+maxTimeDelay: 2592000
+maxBlockDelay: 216000
+stopOnFail: true
+coverage: true
+corpusDir: security/corpus
+coverageDir: security/reports/echidna-coverage
+coverageFormats: ["txt", "lcov"]

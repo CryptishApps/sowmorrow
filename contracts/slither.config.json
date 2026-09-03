@@ -1,0 +1,7 @@
+{
+  "exclude_dependencies": true,
+  "filter_paths": "lib|test|script",
+  "fail_on": "medium",
+  "foundry_out_directory": "out",
+  "json": "security/reports/slither.json"
+}

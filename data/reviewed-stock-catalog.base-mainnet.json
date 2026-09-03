@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "chainId": 8453,
+  "network": "base-mainnet",
+  "reviewedSource": {
+    "url": "https://docs.base.org/specifications/b20/tokenized-stocks-on-base",
+    "retrievedAt": "2026-09-03T08:19:01Z",
+    "contentSha256": "e635113b3455ec950348725702ac2aa0cb811b562f498d2eeb9011fcbf1772f7",
+    "addressSetSha256": "6f9668465af1f0f939d7c9e9c46fc0ad00eecd02782f1983a9f67bce87f7b92f",
+    "rpcVerifiedAtBlock": 50817090
+  },
+  "b20": {
+    "generation": "beryl",
+    "factoryAddress": "0xB20f000000000000000000000000000000000000",
+    "variant": "asset",
+    "wadPrecision": "1000000000000000000"
+  },
+  "stocks": [
+    {
+      "symbol": "AAPLc",
+      "officialName": "Apple Inc.",
+      "displayName": "Apple",
+      "address": "0xb200000000000000000000C2e324d24d7eEcd1fb",
+      "decimals": 18,
+      "hue": 210
+    },
+    {
+      "symbol": "AMZNc",
+      "officialName": "Amazon.com Inc.",
+      "displayName": "Amazon",
+      "address": "0xb200000000000000000000d9192b6B456483C2E8",
+      "decimals": 18,
+      "hue": 35
+    },
+    {
+      "symbol": "COINc",
+      "officialName": "Coinbase Global Inc.",
+      "displayName": "Coinbase",
+      "address": "0xb200000000000000000000c85a31389D71F3ecfb",
+      "decimals": 18,
+      "hue": 225
+    },
+    {
+      "symbol": "CRCLc",
+      "officialName": "Circle Internet Group Inc.",
+      "displayName": "Circle",
+      "address": "0xB20000000000000000000019f6E7C675b73C2e4D",
+      "decimals": 18,
+      "hue": 196
+    },
+    {
+      "symbol": "GOOGLc",
+      "officialName": "Alphabet Inc.",
+      "displayName": "Alphabet",
+      "address": "0xb2000000000000000000002D0BA3164cc74f58B7",
+      "decimals": 18,
+      "hue": 50
+    },
+    {
+      "symbol": "INTCc",
+      "officialName": "Intel Corporation",
+      "displayName": "Intel",
+      "address": "0xB2000000000000000000004AFF16039bA04bdFBc",
+      "decimals": 18,
+      "hue": 205
+    },
+    {
+      "symbol": "METAc",
+      "officialName": "Meta Platforms Inc.",
+      "displayName": "Meta",
+      "address": "0xb2000000000000000000008bC8786B856E61707C",
+      "decimals": 18,
+      "hue": 238
+    },
+    {
+      "symbol": "MSFTc",
+      "officialName": "Microsoft Corporation",
+      "displayName": "Microsoft",
+      "address": "0xB200000000000000000000Ab99cFa739E253872B",
+      "decimals": 18,
+      "hue": 200
+    },
+    {
+      "symbol": "MSTRc",
+      "officialName": "Strategy Inc.",
+      "displayName": "Strategy",
+      "address": "0xb2000000000000000000004884b426556b92883d",
+      "decimals": 18,
+      "hue": 9
+    },
+    {
+      "symbol": "NVDAc",
+      "officialName": "NVIDIA Corporation",
+      "displayName": "NVIDIA",
+      "address": "0xb20000000000000000000078ee7ce2fE4908108C",
+      "decimals": 18,
+      "hue": 120
+    },
+    {
+      "symbol": "SNDKc",
+      "officialName": "Sandisk Corporation",
+      "displayName": "Sandisk",
+      "address": "0xb200000000000000000000397293Cb8cda9a10c5",
+      "decimals": 18,
+      "hue": 347
+    },
+    {
+      "symbol": "SPCXc",
+      "officialName": "Space Exploration Technologies Corp.",
+      "displayName": "SpaceX",
+      "address": "0xb2000000000000000000007b9fcbd005511aCBd5",
+      "decimals": 18,
+      "hue": 222
+    },
+    {
+      "symbol": "TSLAc",
+      "officialName": "Tesla Inc.",
+      "displayName": "Tesla",
+      "address": "0xb2000000000000000000001e800a7f5189430cD0",
+      "decimals": 18,
+      "hue": 0
+    }
+  ]
+}

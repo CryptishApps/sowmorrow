@@ -1,0 +1,55 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+solc = "0.8.36"
+optimizer = true
+optimizer_runs = 200
+bytecode_hash = "none"
+gas_reports = ["SowmorrowVault"]
+# The external-node lane only has meaning against a running base-anvil RPC; `forge test` must not
+# pick it up in reference mode. `npm run contracts:test:integration` selects the profile below.
+no_match_path = "test/fixtures/LocalNodeIntegration.t.sol"
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
+
+remappings = [
+  "forge-std/=lib/forge-std/src/",
+  "base-std/=lib/base-std/src/",
+  "base-std-test/=lib/base-std/test/",
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+]
+
+[profile.default.fuzz]
+runs = 1000
+fail_on_revert = true
+failure_persist_dir = "cache/fuzz"
+
+[profile.default.invariant]
+runs = 512
+depth = 128
+fail_on_revert = true
+show_metrics = true
+failure_persist_dir = "cache/invariant"
+
+[profile.integration]
+no_match_path = "src/**"
+
+[profile.ci.fuzz]
+runs = 5000
+
+[profile.ci.invariant]
+runs = 1000
+depth = 256
+
+[fmt]
+line_length = 120
+tab_width = 4
+bracket_spacing = true
+int_types = "long"
+quote_style = "double"
+
+[rpc_endpoints]
+base = "${BASE_MAINNET_RPC_URL}"
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
