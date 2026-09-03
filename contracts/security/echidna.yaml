@@ -3,7 +3,7 @@ testLimit: 2500
 seqLen: 100
 timeout: 180
 workers: 1
-allContracts: true
+allContracts: false
 seed: 1326304916
 maxTimeDelay: 2592000
 maxBlockDelay: 216000

@@ -63,7 +63,7 @@ npm run contracts:slither
 npm run contracts:echidna
 ```
 
-Slither runs the full first-party detector set. Only the fingerprints justified in [security/slither-triage.md](./security/slither-triage.md) pass the report checker. Echidna runs a six-property harness against the real vault; its campaign stops at 2,500 calls because Echidna 2.3.3 crashes on this host at call 2,774 with the recorded seed. Forge's invariant campaigns are the long-run property evidence.
+Slither runs the full first-party detector set. Only the fingerprints justified in [security/slither-triage.md](./security/slither-triage.md) pass the report checker. Echidna runs a deterministic six-property campaign against the real vault with a 2,500-test limit. Its isolated compile enables contract metadata so Echidna can identify constructor-deployed contracts; production builds remain metadata-free. The wrapper also turns an internal fuzzer crash into a failed command even when Echidna returns a zero exit code. Forge's invariant campaigns are the long-run property evidence.
 
 One caveat on the invariant names. `invariant_vaultBalanceAlwaysCoversRecordedLiability` and `echidna_vault_is_solvent` hold because no handler models issuer seizure. Read them as "solvent absent issuer action".
 

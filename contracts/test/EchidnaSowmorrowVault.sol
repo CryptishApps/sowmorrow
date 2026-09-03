@@ -170,16 +170,13 @@ contract EchidnaSowmorrowVault {
 
     function tryUnauthorizedAdminAction(bool pauseAction) external {
         bool currentlySupported = vault.supportedStock(ASSET_ADDRESS);
-        vm.prank(address(0xBEEF));
-        (bool succeeded,) = address(vault)
-            .call(
-                pauseAction
-                    ? abi.encodeCall(SowmorrowVault.setCreationPaused, (!vault.creationPaused()))
-                    : abi.encodeCall(
-                        SowmorrowVault.setSupportedStock,
-                        (ASSET_ADDRESS, !currentlySupported, currentlySupported ? 0 : 1)
-                    )
+        bytes memory callData = pauseAction
+            ? abi.encodeCall(SowmorrowVault.setCreationPaused, (!vault.creationPaused()))
+            : abi.encodeCall(
+                SowmorrowVault.setSupportedStock, (ASSET_ADDRESS, !currentlySupported, currentlySupported ? 0 : 1)
             );
+        vm.prank(address(0xBEEF));
+        (bool succeeded,) = address(vault).call(callData);
         if (succeeded) unauthorizedAdminSucceeded = true;
     }
 

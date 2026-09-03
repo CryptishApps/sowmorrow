@@ -43,6 +43,19 @@ fi
 cd "$REPOSITORY_ROOT/contracts"
 rm -rf security/corpus security/reports/echidna-coverage
 mkdir -p security/reports
-uv run --project security --frozen "$BINARY" test/EchidnaSowmorrowVault.sol \
+ECHIDNA_LOG="$(mktemp "${TMPDIR:-/tmp}/sowmorrow-echidna.XXXXXX")"
+trap 'rm -f "$ECHIDNA_LOG"' EXIT
+
+set +e
+FOUNDRY_BYTECODE_HASH=ipfs uv run --project security --frozen "$BINARY" test/EchidnaSowmorrowVault.sol \
   --contract EchidnaSowmorrowVault \
-  --config security/echidna.yaml
+  --config security/echidna.yaml 2>&1 | tee "$ECHIDNA_LOG"
+ECHIDNA_STATUS="${PIPESTATUS[0]}"
+set -e
+
+if grep -Fq '] Crashed:' "$ECHIDNA_LOG"; then
+  echo "Echidna terminated with an internal crash" >&2
+  exit 1
+fi
+
+exit "$ECHIDNA_STATUS"
