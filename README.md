@@ -4,7 +4,7 @@
 
 Sowmorrow turns Coinbase tokenized stocks on Base into time-locked gifts. A sender plants stock for another address, chooses an opening date, and only the recipient can claim it once that date arrives.
 
-The app starts in a safe read-only preview. Wallet writes remain unavailable until the selected chain has a verified vault deployment, and Base mainnet has an additional release gate. No public vault is deployed yet; the checked-in mainnet and Sepolia manifests are intentionally pending.
+The app starts in a safe read-only preview. Wallet writes remain unavailable until the selected chain has a verified vault deployment, and Base mainnet has an additional release gate. A public Base Sepolia test vault is active; Base mainnet remains intentionally pending.
 
 ## Features
 
@@ -33,7 +33,7 @@ cp .env.local.example .env.local
 npm run dev
 ```
 
-The app is then available at the URL printed by Next. With the example values it stays in Base mainnet preview mode and cannot request a signature.
+The app is then available at the URL printed by Next. With the example values it stays in Base Sepolia preview mode and cannot request a signature.
 
 ## Verification
 

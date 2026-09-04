@@ -36,7 +36,7 @@ const deploymentManifestSchema = z
     runtimeBytecodeHash: runtimeHashSchema.nullable(),
     owner: z
       .object({
-        kind: z.enum(["safe", "test-safe", "local-eoa"]),
+        kind: z.enum(["safe", "test-safe", "test-eoa", "local-eoa"]),
         address: addressSchema.nullable(),
       })
       .strict(),
@@ -98,8 +98,12 @@ export function parseDeploymentManifest(input: unknown): DeploymentManifest {
     }
   }
 
-  if (manifest.chainId === 84532 && manifest.owner.kind !== "test-safe") {
-    throw new Error("Base Sepolia requires a test Safe owner");
+  if (
+    manifest.chainId === 84532 &&
+    manifest.owner.kind !== "test-safe" &&
+    manifest.owner.kind !== "test-eoa"
+  ) {
+    throw new Error("Base Sepolia requires a test owner");
   }
   if (manifest.chainId === 31337 && manifest.owner.kind !== "local-eoa") {
     throw new Error("Local deployments require a local EOA owner");

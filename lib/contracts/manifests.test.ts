@@ -30,6 +30,18 @@ function activeMainnet(): DeploymentManifest {
   });
 }
 
+function pendingSepolia() {
+  return {
+    ...sepoliaJson,
+    status: "pending",
+    vaultAddress: null,
+    deploymentBlock: null,
+    runtimeBytecodeHash: null,
+    expectedCreationPaused: null,
+    stocks: [],
+  } as const;
+}
+
 describe("deployment manifest parsing", () => {
   it("accepts the three checked manifests", () => {
     expect(parseDeploymentManifest(mainnetJson).chainId).toBe(8453);
@@ -92,10 +104,13 @@ describe("deployment manifest parsing", () => {
     ).toThrow("differs from the reviewed stock catalog");
   });
 
-  it("requires a test Safe on Sepolia and a local EOA locally", () => {
-    expect(() => parseDeploymentManifest({ ...sepoliaJson, owner: { kind: "safe", address: null } })).toThrow(
-      "test Safe owner",
-    );
+  it("accepts explicit test owners on Sepolia and requires a local EOA locally", () => {
+    expect(
+      parseDeploymentManifest({ ...pendingSepolia(), owner: { kind: "test-eoa", address: null } }).owner.kind,
+    ).toBe("test-eoa");
+    expect(() =>
+      parseDeploymentManifest({ ...pendingSepolia(), owner: { kind: "safe", address: null } }),
+    ).toThrow("test owner");
     expect(() => parseDeploymentManifest({ ...localJson, owner: { kind: "safe", address: null } })).toThrow(
       "local EOA owner",
     );

@@ -39,7 +39,7 @@
       "additionalProperties": false,
       "required": ["kind", "address"],
       "properties": {
-        "kind": { "enum": ["local-eoa", "test-safe", "safe"] },
+        "kind": { "enum": ["local-eoa", "test-eoa", "test-safe", "safe"] },
         "address": {
           "anyOf": [{ "type": "null" }, { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" }]
         }

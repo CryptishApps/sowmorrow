@@ -18,7 +18,7 @@ fi
 
 rm -f "$state_file"
 rm -f "$repository_root/contracts/deployments/local-31337.generated.json"
-rm -rf "$repository_root/contracts/broadcast/DeployLocalFixtures.s.sol/31337"
+rm -rf "$repository_root/contracts/broadcast/DeployTestFixtures.s.sol/31337"
 npx tsx "$repository_root/scripts/contracts/manifest-from-broadcast.ts" --pending
 npx prettier --write "$repository_root/contracts/deployments/local-31337.json" >/dev/null
 echo "local stack down"

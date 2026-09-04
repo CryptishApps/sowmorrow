@@ -6,8 +6,26 @@ import { z } from "zod";
 import { parseDeploymentManifest } from "../../lib/contracts/manifests";
 import { stockSymbols } from "../../lib/stocks";
 
-const LOCAL_CHAIN_ID = 31337;
 const repositoryRoot = resolve(import.meta.dirname, "../..");
+const fixtureChainIdSchema = z.union([z.literal(31337), z.literal(84532)]);
+type FixtureChainId = z.infer<typeof fixtureChainIdSchema>;
+
+const configurationForChain = {
+  31337: {
+    network: "local",
+    ownerKind: "local-eoa",
+    artifact: "contracts/deployments/local-31337.generated.json",
+    broadcast: "contracts/broadcast/DeployTestFixtures.s.sol/31337/run-latest.json",
+    out: "contracts/deployments/local-31337.json",
+  },
+  84532: {
+    network: "base-sepolia",
+    ownerKind: "test-eoa",
+    artifact: "contracts/deployments/base-sepolia-84532.generated.json",
+    broadcast: "contracts/broadcast/DeployTestFixtures.s.sol/84532/run-latest.json",
+    out: "contracts/deployments/base-sepolia-84532.json",
+  },
+} as const;
 
 const addressSchema = z
   .string()
@@ -16,7 +34,7 @@ const addressSchema = z
 
 const runArtifactSchema = z
   .object({
-    chainId: z.literal(LOCAL_CHAIN_ID),
+    chainId: fixtureChainIdSchema,
     contractVersion: z.literal("1.0.0"),
     simulationBlock: z.number().int().nonnegative(),
     deployer: addressSchema,
@@ -33,7 +51,7 @@ const runArtifactSchema = z
 
 const broadcastSchema = z
   .object({
-    chain: z.literal(LOCAL_CHAIN_ID),
+    chain: fixtureChainIdSchema,
     transactions: z.array(
       z.object({
         hash: z.string(),
@@ -46,30 +64,37 @@ const broadcastSchema = z
   })
   .loose();
 
-const pendingManifest = {
-  $schema: "./deployment-manifest.schema.json",
-  schemaVersion: 1,
-  contractVersion: "1.0.0",
-  chainId: LOCAL_CHAIN_ID,
-  network: "local",
-  status: "pending",
-  vaultAddress: null,
-  deploymentBlock: null,
-  runtimeBytecodeHash: null,
-  owner: { kind: "local-eoa", address: null },
-  startPaused: false,
-  expectedCreationPaused: null,
-  catalogAddressSetSha256: null,
-  stocks: [],
-} as const;
-
 function readJson(path: string) {
   return JSON.parse(readFileSync(path, "utf8")) as unknown;
 }
 
-function buildActiveManifest(artifactPath: string, broadcastPath: string) {
+function pendingManifest(chainId: FixtureChainId) {
+  const configuration = configurationForChain[chainId];
+  return {
+    $schema: "./deployment-manifest.schema.json",
+    schemaVersion: 1,
+    contractVersion: "1.0.0",
+    chainId,
+    network: configuration.network,
+    status: "pending",
+    vaultAddress: null,
+    deploymentBlock: null,
+    runtimeBytecodeHash: null,
+    owner: { kind: configuration.ownerKind, address: null },
+    startPaused: false,
+    expectedCreationPaused: null,
+    catalogAddressSetSha256: null,
+    stocks: [],
+  } as const;
+}
+
+function buildActiveManifest(chainId: FixtureChainId, artifactPath: string, broadcastPath: string) {
+  const configuration = configurationForChain[chainId];
   const artifact = runArtifactSchema.parse(readJson(artifactPath));
   const broadcast = broadcastSchema.parse(readJson(broadcastPath));
+  if (artifact.chainId !== chainId || broadcast.chain !== chainId) {
+    throw new Error("The fixture artifact, broadcast, and requested chain must agree");
+  }
 
   const vaultCreations = broadcast.transactions.filter(
     (transaction) =>
@@ -90,11 +115,8 @@ function buildActiveManifest(artifactPath: string, broadcastPath: string) {
   const receipt = broadcast.receipts.find((entry) => entry.transactionHash === vaultCreation.hash);
   if (!receipt) throw new Error("The broadcast has no receipt for the vault creation");
   const deploymentBlock = Number(receipt.blockNumber);
-  if (!Number.isSafeInteger(deploymentBlock) || deploymentBlock < 0) {
-    throw new Error("The vault creation receipt has no usable block number");
-  }
-  if (deploymentBlock === 0) {
-    throw new Error("The vault creation receipt reports the genesis block");
+  if (!Number.isSafeInteger(deploymentBlock) || deploymentBlock <= 0) {
+    throw new Error("The vault creation receipt has no usable deployment block");
   }
 
   if (
@@ -103,7 +125,7 @@ function buildActiveManifest(artifactPath: string, broadcastPath: string) {
     artifact.fixtureSymbols.length !== stockSymbols.length
   ) {
     throw new Error(
-      `The local stack must create exactly ${stockSymbols.length} fixtures, one per reviewed rail symbol`,
+      `The fixture deployment must create exactly ${stockSymbols.length} fixtures, one per stock symbol`,
     );
   }
 
@@ -111,37 +133,39 @@ function buildActiveManifest(artifactPath: string, broadcastPath: string) {
     $schema: "./deployment-manifest.schema.json",
     schemaVersion: 1,
     contractVersion: artifact.contractVersion,
-    chainId: LOCAL_CHAIN_ID,
-    network: "local",
+    chainId,
+    network: configuration.network,
     status: "active",
     vaultAddress: artifact.vaultAddress,
     deploymentBlock,
     runtimeBytecodeHash: artifact.runtimeBytecodeHash.toLowerCase(),
-    owner: { kind: "local-eoa", address: artifact.owner },
+    owner: { kind: configuration.ownerKind, address: artifact.owner },
     startPaused: artifact.startPaused,
     expectedCreationPaused: artifact.startPaused,
     catalogAddressSetSha256: null,
     stocks: stockSymbols.map((symbol, index) => ({ symbol, address: artifact.fixtureAddresses[index] })),
-  };
+  } as const;
 }
 
 const { values } = parseArgs({
   options: {
-    artifact: { type: "string", default: "contracts/deployments/local-31337.generated.json" },
-    broadcast: {
-      type: "string",
-      default: "contracts/broadcast/DeployLocalFixtures.s.sol/31337/run-latest.json",
-    },
-    out: { type: "string", default: "contracts/deployments/local-31337.json" },
+    "chain-id": { type: "string", default: "31337" },
+    artifact: { type: "string" },
+    broadcast: { type: "string" },
+    out: { type: "string" },
     pending: { type: "boolean", default: false },
   },
 });
 
-const outPath = resolve(repositoryRoot, values.out);
+const chainId = fixtureChainIdSchema.parse(Number(values["chain-id"]));
+const configuration = configurationForChain[chainId];
+const artifactPath = resolve(repositoryRoot, values.artifact ?? configuration.artifact);
+const broadcastPath = resolve(repositoryRoot, values.broadcast ?? configuration.broadcast);
+const out = values.out ?? configuration.out;
 const manifest = values.pending
-  ? pendingManifest
-  : buildActiveManifest(resolve(repositoryRoot, values.artifact), resolve(repositoryRoot, values.broadcast));
+  ? pendingManifest(chainId)
+  : buildActiveManifest(chainId, artifactPath, broadcastPath);
 
 parseDeploymentManifest(manifest);
-writeFileSync(outPath, `${JSON.stringify(manifest, null, 2)}\n`);
-console.log(`wrote ${values.out} (${manifest.status})`);
+writeFileSync(resolve(repositoryRoot, out), `${JSON.stringify(manifest, null, 2)}\n`);
+console.log(`wrote ${out} (${manifest.status})`);

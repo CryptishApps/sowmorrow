@@ -10,28 +10,24 @@ import { SowmorrowTestStockFaucet } from "../src/fixtures/SowmorrowTestStockFauc
 import { SowmorrowVault } from "../src/SowmorrowVault.sol";
 import { SowmorrowTestFixtures } from "./SowmorrowTestFixtures.sol";
 
-/// @title DeployLocalFixtures
-/// @notice Creates the valueless B20 fixtures, faucet, and vault that back the local stack, then
-///         writes the addresses to `deployments/local-31337.generated.json`.
-/// @dev Local chain only. `scripts/local/up.sh` runs this against the pinned `base-anvil` container
-///      and `scripts/contracts/manifest-from-broadcast.ts` turns the artifact into the checked
-///      manifest, so no address is ever typed by hand.
-contract DeployLocalFixtures is Script {
-    /// @notice The script was pointed at a chain that is not the local development chain.
-    error NotLocalChain(uint256 chainId);
-
-    /// @notice A fixture landed at an address other than the one the factory predicted.
+contract DeployTestFixtures is Script {
+    error UnsupportedTestChain(uint256 chainId);
     error FixtureAddressMismatch(uint256 index, address predicted, address actual);
 
-    /// @notice Path the run artifact is written to, relative to the Foundry project root.
-    string public constant ARTIFACT_PATH = "./deployments/local-31337.generated.json";
-
-    /// @notice Minimum `createGift` amount given to every valueless fixture, in raw units.
+    uint256 public constant LOCAL_CHAIN_ID = 31337;
+    uint256 public constant BASE_SEPOLIA_CHAIN_ID = 84532;
+    string public constant LOCAL_ARTIFACT_PATH = "./deployments/local-31337.generated.json";
+    string public constant SEPOLIA_ARTIFACT_PATH = "./deployments/base-sepolia-84532.generated.json";
     uint256 public constant FIXTURE_MIN_GIFT_AMOUNT_RAW = 0.01 ether;
 
     function run() external returns (SowmorrowVault vault, SowmorrowTestStockFaucet faucet) {
-        address deployer;
-        if (block.chainid != 31337) revert NotLocalChain(block.chainid);
+        uint256 chainId = block.chainid;
+        if (chainId != LOCAL_CHAIN_ID && chainId != BASE_SEPOLIA_CHAIN_ID) {
+            revert UnsupportedTestChain(chainId);
+        }
+
+        address configuredOwner;
+        if (chainId == BASE_SEPOLIA_CHAIN_ID) configuredOwner = vm.envAddress("SOWMORROW_OWNER");
 
         SowmorrowTestFixtures.Fixture[] memory definitions = SowmorrowTestFixtures.all();
         uint256 count = definitions.length;
@@ -39,10 +35,10 @@ contract DeployLocalFixtures is Script {
         string[] memory names = new string[](count);
         string[] memory symbols = new string[](count);
 
-        IB20Factory b20Factory = StdPrecompiles.B20_FACTORY;
-
+        address deployer;
         vm.startBroadcast();
         (, deployer,) = vm.readCallers();
+        address owner = chainId == LOCAL_CHAIN_ID ? deployer : configuredOwner;
         for (uint256 index = 0; index < count; ++index) {
             address predicted = StdPrecompiles.B20_FACTORY
             .getB20Address(IB20Factory.B20Variant.ASSET, deployer, definitions[index].salt);
@@ -63,11 +59,11 @@ contract DeployLocalFixtures is Script {
         for (uint256 index = 0; index < count; ++index) {
             minGiftAmountsRaw[index] = FIXTURE_MIN_GIFT_AMOUNT_RAW;
         }
-        vault = new SowmorrowVault(deployer, addresses, minGiftAmountsRaw, false);
+        vault = new SowmorrowVault(owner, addresses, minGiftAmountsRaw, false);
         vm.stopBroadcast();
 
-        string memory artifact = "sowmorrow-local-fixtures";
-        vm.serializeUint(artifact, "chainId", block.chainid);
+        string memory artifact = "sowmorrow-test-fixtures";
+        vm.serializeUint(artifact, "chainId", chainId);
         vm.serializeUint(artifact, "simulationBlock", block.number);
         vm.serializeString(artifact, "contractVersion", vault.VERSION());
         vm.serializeAddress(artifact, "deployer", deployer);
@@ -78,6 +74,7 @@ contract DeployLocalFixtures is Script {
         vm.serializeBool(artifact, "startPaused", vault.creationPaused());
         vm.serializeString(artifact, "fixtureNames", names);
         vm.serializeString(artifact, "fixtureSymbols", symbols);
-        vm.writeJson(vm.serializeAddress(artifact, "fixtureAddresses", addresses), ARTIFACT_PATH);
+        string memory artifactPath = chainId == LOCAL_CHAIN_ID ? LOCAL_ARTIFACT_PATH : SEPOLIA_ARTIFACT_PATH;
+        vm.writeJson(vm.serializeAddress(artifact, "fixtureAddresses", addresses), artifactPath);
     }
 }

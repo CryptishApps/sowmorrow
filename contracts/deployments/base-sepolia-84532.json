@@ -4,13 +4,69 @@
   "contractVersion": "1.0.0",
   "chainId": 84532,
   "network": "base-sepolia",
-  "status": "pending",
-  "vaultAddress": null,
-  "deploymentBlock": null,
-  "runtimeBytecodeHash": null,
-  "owner": { "kind": "test-safe", "address": null },
+  "status": "active",
+  "vaultAddress": "0xE7d5D1B5ccA1AE3304A5eA41333F4b8bcEE946e8",
+  "deploymentBlock": 46380008,
+  "runtimeBytecodeHash": "0x6431932cd64e9ecf5254b60369d789e5f09a29ff37842f5b417a84b4959ee6e2",
+  "owner": {
+    "kind": "test-eoa",
+    "address": "0x44eAe526868aC7ce0499a6642440Eba9a61cC1e0"
+  },
   "startPaused": false,
-  "expectedCreationPaused": null,
+  "expectedCreationPaused": false,
   "catalogAddressSetSha256": null,
-  "stocks": []
+  "stocks": [
+    {
+      "symbol": "AAPLc",
+      "address": "0xb20000000000000000000066F947F32Df535B78a"
+    },
+    {
+      "symbol": "AMZNc",
+      "address": "0xB2000000000000000000004c32c6eDCF98a031f5"
+    },
+    {
+      "symbol": "COINc",
+      "address": "0xB2000000000000000000004EeDA929A05bD7bD9d"
+    },
+    {
+      "symbol": "CRCLc",
+      "address": "0xB200000000000000000000E71B59a65792578567"
+    },
+    {
+      "symbol": "GOOGLc",
+      "address": "0xB20000000000000000000000f001D2C51A787bB4"
+    },
+    {
+      "symbol": "INTCc",
+      "address": "0xb2000000000000000000001C16153Fd509991390"
+    },
+    {
+      "symbol": "METAc",
+      "address": "0xB2000000000000000000002d8D4d6751B0abcb6C"
+    },
+    {
+      "symbol": "MSFTc",
+      "address": "0xb2000000000000000000005F24808783Eb381F04"
+    },
+    {
+      "symbol": "MSTRc",
+      "address": "0xB2000000000000000000008B5472fA49211c3c44"
+    },
+    {
+      "symbol": "NVDAc",
+      "address": "0xb20000000000000000000018D5b2dA910E431f67"
+    },
+    {
+      "symbol": "SNDKc",
+      "address": "0xB20000000000000000000060435C65aF4b07d289"
+    },
+    {
+      "symbol": "SPCXc",
+      "address": "0xb2000000000000000000005972e59B153Ce59606"
+    },
+    {
+      "symbol": "TSLAc",
+      "address": "0xB200000000000000000000221eBc90263DFb6d07"
+    }
+  ]
 }

@@ -85,8 +85,8 @@ if [[ "$(rpc_chain_id)" != "$local_chain_id" || "$(genesis_hash)" != "$observed_
   exit 1
 fi
 
-rm -rf "$repository_root/contracts/broadcast/DeployLocalFixtures.s.sol/$local_chain_id"
-run_base_forge script script/DeployLocalFixtures.s.sol:DeployLocalFixtures \
+rm -rf "$repository_root/contracts/broadcast/DeployTestFixtures.s.sol/$local_chain_id"
+run_base_forge script script/DeployTestFixtures.s.sol:DeployTestFixtures \
   --rpc-url "http://127.0.0.1:8545" \
   --unlocked \
   --sender "$local_deployer_address" \

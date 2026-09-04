@@ -79,6 +79,14 @@ Exact commits, archive hashes, and the native image digest are in [toolchain.loc
 
 ## Deployment
 
+[script/DeployTestFixtures.s.sol](./script/DeployTestFixtures.s.sol) is the local and Base Sepolia test deployment. It creates 13 valueless B20 test stocks, a public test faucet, and an unpaused vault with a `0.01`-token minimum for every fixture. On Base Sepolia, `SOWMORROW_OWNER` must be the funded test EOA that signs the deployment. The Base-native Foundry image pinned in [toolchain.lock.json](./toolchain.lock.json) is required because the B20 factory is a Base precompile. Generate the active manifest from the completed broadcast with:
+
+```sh
+npx tsx scripts/contracts/manifest-from-broadcast.ts --chain-id 84532
+```
+
+The current Base Sepolia faucet is [`0x268e0892f601c13d273525855C4933A9cB33e822`](https://sepolia.basescan.org/address/0x268e0892f601c13d273525855c4933a9cb33e822). Any address can call `requestFixture(stock, amountRaw)` for up to 100 test tokens once per hour; supported stock addresses are listed in [base-sepolia-84532.json](./deployments/base-sepolia-84532.json).
+
 [script/DeploySowmorrow.s.sol](./script/DeploySowmorrow.s.sol) accepts chain IDs `31337`, `84532`, and `8453` only. Mainnet requires a Safe owner, the reviewed 13-stock constructor list paired with the reviewed per-stock minimums in `reviewedMinGiftAmountsRaw()`, and `SOWMORROW_START_PAUSED=true`. Test networks require explicit, valueless fixture addresses in `SOWMORROW_STOCKS` with a same-length, same-order `SOWMORROW_MIN_AMOUNTS_RAW`; production company addresses are never reused there.
 
 Simulate without `--broadcast`:

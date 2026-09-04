@@ -9,6 +9,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  images: { qualities: [70, 75, 82] },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
