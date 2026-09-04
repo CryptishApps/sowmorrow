@@ -13,7 +13,7 @@ test("reads a gift link without a wallet while the manifest is still pending", a
 
   await expect(page.getByRole("heading", { name: "This vault is not planted yet." })).toBeVisible();
   await expect(page.getByTestId("gift-pending-manifest")).toContainText("no active reviewed Sowmorrow");
-  await expect(page.getByText(vault)).toBeVisible();
+  await expect(page.getByText("0x4444…4444")).toBeVisible();
   await expect(page.getByText("Gift #1")).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to Sowmorrow" })).toHaveAttribute("href", "/");
 });
