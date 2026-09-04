@@ -13,7 +13,22 @@ import { mock } from "wagmi/connectors";
 import type { AppDeployment } from "@/lib/contracts/config";
 import { sowmorrowVaultAbi } from "@/lib/contracts/generated";
 import { pendingClaimStorageKey, pendingPlantStorageKey } from "@/lib/contracts/pending";
-import { toUnlockAt } from "@/lib/gifts";
+import { hashGiftNote, toUnlockAt } from "@/lib/gifts";
+
+const mirror = vi.hoisted(() => ({
+  attachNote: vi.fn(),
+  query: {
+    configured: true,
+    connected: true,
+    data: null as unknown,
+    error: null as Error | null,
+  },
+}));
+
+vi.mock("@/lib/convex/provider", () => ({
+  useMirrorMutation: () => mirror.attachNote,
+  useMirrorQuery: () => mirror.query,
+}));
 
 const account = getAddress("0x1111111111111111111111111111111111111111");
 const recipient = getAddress("0x2222222222222222222222222222222222222222");
@@ -131,6 +146,7 @@ function giftCreatedLog(entry: {
   stock: Address;
   amountRaw: bigint;
   unlockAt: bigint;
+  noteHash?: `0x${string}`;
 }) {
   return {
     address: vault,
@@ -141,7 +157,7 @@ function giftCreatedLog(entry: {
     }),
     data: encodeAbiParameters(
       [{ type: "address" }, { type: "uint256" }, { type: "uint64" }, { type: "bytes32" }],
-      [entry.stock, entry.amountRaw, entry.unlockAt, zeroNoteHash],
+      [entry.stock, entry.amountRaw, entry.unlockAt, entry.noteHash ?? zeroNoteHash],
     ),
   };
 }
@@ -257,12 +273,14 @@ beforeEach(async () => {
   supportedStocks.clear();
   writeMutateAsync.mockReset();
   switchChainMutate.mockReset();
+  mirror.attachNote.mockReset().mockResolvedValue({ operation: "attached" });
+  mirror.query = { configured: true, connected: true, data: null, error: null };
   publicClient.current = makeClient();
   await disconnect(testConfig).catch(() => undefined);
 });
 
 describe("Plant state machine", () => {
-  it("blocks review until the draft is complete, then shows the exact reviewed gift", async () => {
+  it("blocks review until the draft is complete, then shows a friendly reviewed gift", async () => {
     const user = userEvent.setup();
     await connect(testConfig, { connector: testConfig.connectors[0] });
     render(<Harness />);
@@ -272,8 +290,10 @@ describe("Plant state machine", () => {
     await user.click(screen.getByRole("button", { name: "Review gift" }));
 
     const review = await screen.findByRole("region", { name: "Gift review" });
-    expect(within(review).getAllByText(recipient)).toHaveLength(2);
-    expect(within(review).getByText("250000 raw units")).toBeInTheDocument();
+    expect(within(review).getByText("0x2222…2222")).toBeInTheDocument();
+    expect(within(review).queryByText(recipient)).not.toBeInTheDocument();
+    expect(within(review).queryByText(/raw units/)).not.toBeInTheDocument();
+    expect(within(review).queryByText("Technical details")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm and plant" })).toBeEnabled();
   });
 
@@ -396,6 +416,57 @@ describe("Plant state machine", () => {
       `/gift/8453/${vault}/7`,
     );
     expect(window.localStorage.getItem(pendingPlantStorageKey(8453, vault, account))).toBeNull();
+  });
+
+  it("waits for the indexed gift before attaching its note", async () => {
+    const user = userEvent.setup();
+    const note = "The first seed planted...";
+    writeMutateAsync.mockResolvedValue(giftHash);
+    publicClient.current = makeClient({
+      waitForTransactionReceipt: vi.fn(async () => ({
+        status: "success",
+        logs: [
+          giftCreatedLog({
+            giftId: 7n,
+            sender: account,
+            recipient,
+            stock: apple,
+            amountRaw: 250_000n,
+            unlockAt: draftUnlockAt,
+            noteHash: hashGiftNote(note),
+          }),
+        ],
+      })),
+    });
+    await connect(testConfig, { connector: testConfig.connectors[0] });
+    const rendered = render(<Harness />);
+
+    await fillDraft(user);
+    await user.type(screen.getByLabelText(/Gift note/), note);
+    await user.click(screen.getByRole("button", { name: "Review gift" }));
+    await user.click(await screen.findByRole("button", { name: "Confirm and plant" }));
+
+    expect(await screen.findByText("It’s in the ground.")).toBeInTheDocument();
+    expect(screen.getByText(/Saving the note once the gift appears in history/)).toBeInTheDocument();
+    expect(mirror.attachNote).not.toHaveBeenCalled();
+
+    mirror.query = {
+      configured: true,
+      connected: true,
+      data: { gift: { giftIdDecimal: "7" }, note: null },
+      error: null,
+    };
+    rendered.rerender(<Harness />);
+
+    await waitFor(() =>
+      expect(mirror.attachNote).toHaveBeenCalledWith({
+        chainId: 8453,
+        vault,
+        giftId: "7",
+        note,
+      }),
+    );
+    expect(await screen.findByText("The note is saved for the recipient to read.")).toBeInTheDocument();
   });
 
   it("recovers a gift transaction persisted by an earlier session", async () => {

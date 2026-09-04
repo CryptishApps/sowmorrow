@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
-import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useConnect,
   useConnection,
@@ -11,7 +11,7 @@ import {
   useSwitchChain,
   useWriteContract,
 } from "wagmi";
-import { formatUnits } from "viem";
+import { formatUnits, isAddress } from "viem";
 import type { Address, Hash } from "viem";
 import { mainnet } from "viem/chains";
 import { ClaimFace } from "@/components/claim-inbox";
@@ -41,7 +41,7 @@ import { decodePendingGift, encodePendingGift, pendingPlantStorageKey } from "@/
 import type { PendingGiftSubmission, PendingPlantSubmission } from "@/lib/contracts/pending";
 import { proveGiftCreated, ReceiptProofError } from "@/lib/contracts/receipts";
 import { mirrorApi, mirrorConfigured } from "@/lib/convex/api";
-import { useMirrorMutation } from "@/lib/convex/provider";
+import { useMirrorMutation, useMirrorQuery } from "@/lib/convex/provider";
 import {
   daysUntil,
   formatUnlockReview,
@@ -222,6 +222,16 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
   const reduceMotion = useReducedMotion();
   const entranceState = useEntranceSettled(reduceMotion);
   const attachNote = useMirrorMutation(mirrorApi.attachNote);
+  const indexedNoteGift = useMirrorQuery(
+    mirrorApi.giftDetail,
+    success && success.giftId !== null && success.note.length > 0 && deployment.vaultAddress
+      ? {
+          chainId: deployment.chainId,
+          vault: deployment.vaultAddress,
+          giftId: success.giftId.toString(),
+        }
+      : null,
+  );
   const storageKey =
     deployment.vaultAddress && connection.address
       ? pendingPlantStorageKey(deployment.chainId, deployment.vaultAddress, connection.address)
@@ -292,22 +302,41 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
     setContractAcknowledged(false);
   };
 
-  const saveNote = async (giftId: bigint, noteText: string) => {
-    const vaultAddress = deployment.vaultAddress;
-    if (!mirrorConfigured || !vaultAddress || noteText.length === 0) return;
-    setNoteAttachment("pending");
-    try {
-      await attachNote({
-        chainId: deployment.chainId,
-        vault: vaultAddress,
-        giftId: giftId.toString(),
-        note: noteText,
-      });
-      setNoteAttachment("attached");
-    } catch {
-      setNoteAttachment("failed");
+  const saveNote = useCallback(
+    async (giftId: bigint, noteText: string) => {
+      const vaultAddress = deployment.vaultAddress;
+      if (!indexedNoteGift.connected || !vaultAddress || noteText.length === 0) return;
+      setNoteAttachment("pending");
+      try {
+        await attachNote({
+          chainId: deployment.chainId,
+          vault: vaultAddress,
+          giftId: giftId.toString(),
+          note: noteText,
+        });
+        setNoteAttachment("attached");
+      } catch {
+        setNoteAttachment("failed");
+      }
+    },
+    [attachNote, deployment.chainId, deployment.vaultAddress, indexedNoteGift.connected],
+  );
+
+  useEffect(() => {
+    if (
+      !success ||
+      success.giftId === null ||
+      success.note.length === 0 ||
+      noteAttachment !== "idle" ||
+      indexedNoteGift.data === undefined ||
+      indexedNoteGift.data === null
+    ) {
+      return;
     }
-  };
+    const giftId = success.giftId;
+    const noteText = success.note;
+    queueMicrotask(() => void saveNote(giftId, noteText));
+  }, [indexedNoteGift.data, noteAttachment, saveNote, success]);
 
   const makeGateway = (): PlantGateway | null => {
     const vaultAddress = deployment.vaultAddress;
@@ -535,7 +564,6 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
         note,
       });
       onPlant();
-      void saveNote(result.giftId, note);
     } catch (caught) {
       setPhase(null);
       if (
@@ -655,8 +683,18 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           </p>
           {success.note.length > 0 && (
             <p className="mt-3 rounded-xl bg-sun/18 px-3 py-2 text-[12px] leading-relaxed text-ink-soft">
-              Only the exact note fingerprint is onchain. Notes are not private; share this text separately
-              and never include secrets.
+              Only the note fingerprint is onchain. The note text is stored off-chain for the recipient. Do
+              not include secrets.
+            </p>
+          )}
+          {success.note.length > 0 && noteAttachment === "idle" && (
+            <p role="status" className="mt-2 text-[11px] font-extrabold text-meadow-deep">
+              Saving the note once the gift appears in history…
+            </p>
+          )}
+          {success.note.length > 0 && noteAttachment === "pending" && (
+            <p role="status" className="mt-2 text-[11px] font-extrabold text-meadow-deep">
+              Saving the note…
             </p>
           )}
           {success.note.length > 0 && noteAttachment === "attached" && (
@@ -744,6 +782,11 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
             : "Review gift";
   const reviewedUnlock = intent ? formatUnlockReview(intent.unlockAt) : null;
   const reviewedAmount = intent ? formatUnits(intent.transferableAmountScaled, intent.decimals) : null;
+  const reviewedRecipient = intent
+    ? isAddress(intent.recipientInput.trim())
+      ? shortAddress(intent.recipient)
+      : `${intent.recipientInput} · ${shortAddress(intent.recipient)}`
+    : null;
   const selectedStock = stocks.find((stock) => stock.symbol === symbol) ?? stocks[0];
   const pendingExplorer = pendingGift ? transactionLink(deployment, pendingGift.hash) : null;
 
@@ -845,7 +888,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           <motion.label variants={entranceItem} className="flex flex-col gap-1">
             <span className="flex items-center justify-between gap-3">
               <span className="field-label">
-                Private note <span className="font-semibold text-ink-soft">(optional)</span>
+                Gift note <span className="font-semibold text-ink-soft">(optional)</span>
               </span>
               <span
                 className={`font-mono text-[10px] ${noteBytes > MAX_GIFT_NOTE_BYTES ? "text-[#9f2e18]" : "text-ink-soft"}`}
@@ -855,7 +898,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
             </span>
             <textarea
               className="field min-h-12 resize-none"
-              placeholder="A note you will share separately"
+              placeholder="A note for the recipient — never include secrets"
               value={note}
               onChange={(event) => {
                 invalidateReview();
@@ -872,7 +915,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
               className="rounded-2xl border border-meadow/25 bg-meadow/7 p-3 text-[11px] leading-relaxed text-ink-soft"
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="font-extrabold text-ink">Review the exact gift</p>
+                <p className="font-extrabold text-ink">Review your gift</p>
                 <button
                   type="button"
                   onClick={invalidateReview}
@@ -885,8 +928,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
               <dl className="mt-2 grid gap-1.5">
                 <div>
                   <dt className="font-extrabold text-ink">Recipient</dt>
-                  <dd>{intent.recipientInput}</dd>
-                  <dd className="break-all font-mono text-[9px] text-ink">{intent.recipient}</dd>
+                  <dd>{reviewedRecipient}</dd>
                 </div>
                 <div>
                   <dt className="font-extrabold text-ink">Stock and amount</dt>
@@ -894,35 +936,21 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
                     {selectedStock.name} · {reviewedAmount} {symbol}
                     {reviewedAmount !== intent.amountInput && ` (entered ${intent.amountInput})`}
                   </dd>
-                  <dd className="break-all font-mono text-[9px] text-ink">Token {intent.stock}</dd>
-                  <dd className="font-mono text-[9px]">{intent.amountRaw.toString()} raw units</dd>
                 </div>
                 <div>
                   <dt className="font-extrabold text-ink">Opens</dt>
                   <dd>{reviewedUnlock.localDate}</dd>
-                  <dd>
-                    {reviewedUnlock.timeZone} · {reviewedUnlock.utc}
-                  </dd>
                 </div>
                 {note.length > 0 && (
                   <div>
                     <dt className="font-extrabold text-ink">Note</dt>
                     <dd className="whitespace-pre-wrap break-words">{note}</dd>
                     <dd>
-                      Only its fingerprint goes onchain. The text is stored off-chain for the recipient, so
-                      keep secrets out of it.
+                      Only its fingerprint goes onchain. The note text is stored off-chain for the recipient.
+                      Do not include secrets.
                     </dd>
                   </div>
                 )}
-                <div>
-                  <dt className="font-extrabold text-ink">Technical details</dt>
-                  <dd className="break-all font-mono text-[9px]">Vault {intent.vault}</dd>
-                  <dd>
-                    Vault v{intent.vaultVersion} · Base block {intent.observedBlockNumber.toString()} · exact
-                    approval{" "}
-                    {intent.approvalRequired ? `${intent.amountRaw.toString()} raw units` : "not needed"}
-                  </dd>
-                </div>
               </dl>
               {intent.recipientIsContract && (
                 <div className="mt-2 rounded-xl border border-sun-deep/40 bg-sun/20 p-2.5 text-ink">

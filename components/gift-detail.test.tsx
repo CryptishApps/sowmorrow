@@ -87,8 +87,13 @@ describe("GiftDetail", () => {
 
     expect(await screen.findByRole("heading", { name: "0.25 AAPLc" })).toBeInTheDocument();
     expect(screen.getByText("ready")).toBeInTheDocument();
-    expect(screen.getByText(sender)).toBeInTheDocument();
-    expect(screen.getByText(recipient)).toBeInTheDocument();
+    expect(screen.getByText("0x1111…1111")).toBeInTheDocument();
+    expect(screen.getByText("0x2222…2222")).toBeInTheDocument();
+    expect(screen.getByText("Apple · AAPLc")).toBeInTheDocument();
+    expect(screen.queryByText(sender)).not.toBeInTheDocument();
+    expect(screen.queryByText(recipient)).not.toBeInTheDocument();
+    expect(screen.queryByText(/raw units|unix seconds/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Vault")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to Sowmorrow" })).toHaveAttribute("href", "/");
   });
 
@@ -133,7 +138,7 @@ describe("GiftDetail", () => {
     });
 
     expect(screen.getByTestId("gift-pending-manifest")).toBeInTheDocument();
-    expect(screen.getByText(vault)).toBeInTheDocument();
+    expect(screen.getByText("0x4444…4444")).toBeInTheDocument();
     expect(publicClient.current.readContract).not.toHaveBeenCalled();
   });
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePublicClient } from "wagmi";
 import { formatUnits } from "viem";
 import type { Address } from "viem";
-import { MirrorNotice, Spinner, StockDot } from "@/components/gift-chrome";
+import { MirrorNotice, shortAddress, Spinner, StockDot } from "@/components/gift-chrome";
 import { HeroBackdrop } from "@/components/hero-backdrop";
 import { Logo } from "@/components/logo";
 import { revertedErrorName } from "@/lib/contracts/errors";
@@ -13,6 +13,7 @@ import { ib20Abi, ib20AssetAbi, sowmorrowVaultAbi } from "@/lib/contracts/genera
 import type { GiftRouteTarget } from "@/lib/contracts/gift-link";
 import { mirrorApi, mirrorConfigured } from "@/lib/convex/api";
 import { useMirrorQuery } from "@/lib/convex/provider";
+import { formatUnlockReview } from "@/lib/gifts";
 import { stocks } from "@/lib/stocks";
 
 type GiftReading = {
@@ -108,12 +109,13 @@ export function GiftDetail({ target }: { target: GiftRouteTarget }) {
       : null,
   );
 
-  const symbol =
+  const selectedStock =
     gift.data === undefined
       ? null
       : (stocks.find(
           (stock) => target.stockAddresses[stock.symbol]?.toLowerCase() === gift.data.stock.toLowerCase(),
-        )?.symbol ?? "B20");
+        ) ?? null);
+  const symbol = gift.data === undefined ? null : (selectedStock?.symbol ?? "B20");
 
   const header = (
     <div className="flex items-center justify-between gap-3">
@@ -138,7 +140,7 @@ export function GiftDetail({ target }: { target: GiftRouteTarget }) {
         </p>
         <dl className="mt-4 grid gap-1 text-[11px] text-ink-soft">
           <dt className="font-extrabold text-ink">Vault in this link</dt>
-          <dd className="break-all font-mono text-[10px] text-ink">{target.vault}</dd>
+          <dd className="font-mono text-[10px] text-ink">{shortAddress(target.vault)}</dd>
         </dl>
         <BackLink />
       </Shell>
@@ -187,7 +189,8 @@ export function GiftDetail({ target }: { target: GiftRouteTarget }) {
   const amount =
     reading.amountScaled !== null && reading.decimals !== null
       ? `${formatUnits(reading.amountScaled, reading.decimals)} ${symbol}`
-      : `${reading.amountRaw} raw units`;
+      : "Amount unavailable";
+  const opens = formatUnlockReview(reading.unlockAt).localDate;
 
   return (
     <Shell>
@@ -203,7 +206,7 @@ export function GiftDetail({ target }: { target: GiftRouteTarget }) {
                 ? "already claimed by the recipient"
                 : unlocked
                   ? "open for the recipient to claim"
-                  : `opens ${new Date(Number(reading.unlockAt) * 1_000).toLocaleString()}`}
+                  : "waiting for its opening day"}
             </span>
           </p>
         </div>
@@ -212,25 +215,19 @@ export function GiftDetail({ target }: { target: GiftRouteTarget }) {
       <dl className="mt-5 grid gap-2.5 text-[11px] leading-relaxed text-ink-soft">
         <div>
           <dt className="font-extrabold text-ink">From</dt>
-          <dd className="break-all font-mono text-[10px] text-ink">{reading.sender}</dd>
+          <dd className="font-mono text-[10px] text-ink">{shortAddress(reading.sender)}</dd>
         </div>
         <div>
           <dt className="font-extrabold text-ink">For</dt>
-          <dd className="break-all font-mono text-[10px] text-ink">{reading.recipient}</dd>
+          <dd className="font-mono text-[10px] text-ink">{shortAddress(reading.recipient)}</dd>
         </div>
         <div>
           <dt className="font-extrabold text-ink">Stock</dt>
-          <dd className="break-all font-mono text-[10px] text-ink">{reading.stock}</dd>
-          <dd>{reading.amountRaw.toString()} raw units</dd>
+          <dd>{selectedStock ? `${selectedStock.name} · ${selectedStock.symbol}` : "B20 stock"}</dd>
         </div>
         <div>
           <dt className="font-extrabold text-ink">Opens</dt>
-          <dd>{new Date(Number(reading.unlockAt) * 1_000).toLocaleString()}</dd>
-          <dd className="font-mono text-[10px]">{reading.unlockAt.toString()} · unix seconds</dd>
-        </div>
-        <div>
-          <dt className="font-extrabold text-ink">Vault</dt>
-          <dd className="break-all font-mono text-[10px] text-ink">{target.vault}</dd>
+          <dd>{opens}</dd>
         </div>
       </dl>
 
