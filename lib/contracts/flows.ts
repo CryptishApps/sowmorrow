@@ -288,6 +288,27 @@ export async function executePreparedPlant(
     throw new GiftFlowError("unlock_too_soon");
   }
 
+  const [finalScaled, finalCode, finalSupported, finalPaused, finalBalance, finalMinimum] = await Promise.all(
+    [
+      gateway.toScaledBalance(intent.stock, intent.amountRaw, finalBlock.number),
+      gateway.hasContractCode(intent.recipient, finalBlock.number),
+      gateway.isStockSupported(intent.stock, intent.vault, finalBlock.number),
+      gateway.isCreationPaused(intent.vault, finalBlock.number),
+      gateway.getRawBalance(intent.stock, intent.account, finalBlock.number),
+      gateway.getMinGiftAmountRaw(intent.stock, intent.vault, finalBlock.number),
+    ],
+  );
+  if (
+    finalScaled !== intent.transferableAmountScaled ||
+    finalCode !== intent.recipientIsContract ||
+    intent.amountRaw < finalMinimum
+  ) {
+    throw new GiftFlowError("review_changed");
+  }
+  if (!finalSupported) throw new GiftFlowError("stock_unavailable");
+  if (finalPaused) throw new GiftFlowError("creation_paused");
+  if (finalBalance < intent.amountRaw) throw new GiftFlowError("insufficient_balance");
+
   onPhase("awaiting_plant");
   const giftHash = await gateway.createGift(
     intent.stock,

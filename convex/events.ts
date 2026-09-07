@@ -128,8 +128,9 @@ async function rebuildGiftProjection(ctx: MutationCtx, key: GiftKey) {
         .eq("vaultAddressLower", key.vaultAddressLower)
         .eq("giftIdDecimal", key.giftIdDecimal),
     )
-    .take(100);
-  const events = allEvents.filter((event) => event.canonicality !== "orphaned");
+    .filter((q) => q.neq(q.field("canonicality"), "orphaned"))
+    .take(3);
+  const events = allEvents;
   const createdEvents = events.filter((event) => event.eventName === "GiftCreated");
   const claimedEvents = events.filter((event) => event.eventName === "GiftClaimed");
   const existingGift = await ctx.db
@@ -141,6 +142,26 @@ async function rebuildGiftProjection(ctx: MutationCtx, key: GiftKey) {
         .eq("giftIdDecimal", key.giftIdDecimal),
     )
     .unique();
+
+  const attachment = await ctx.db
+    .query("noteAttachments")
+    .withIndex("by_gift_key", (q) =>
+      q
+        .eq("chainId", key.chainId)
+        .eq("vaultAddressLower", key.vaultAddressLower)
+        .eq("giftIdDecimal", key.giftIdDecimal),
+    )
+    .unique();
+  const creation = createdEvents[0];
+  if (
+    attachment &&
+    (!creation ||
+      attachment.createdTxHashLower !== creation.transactionHashLower ||
+      attachment.createdLogIndex !== creation.logIndex ||
+      attachment.noteHashLower !== creation.noteHashLower)
+  ) {
+    await ctx.db.delete(attachment._id);
+  }
 
   if (createdEvents.length === 0) {
     if (existingGift) await ctx.db.delete(existingGift._id);
@@ -202,6 +223,16 @@ export const applyCanonicalVaultLog = internalMutation({
   args: eventArgs,
   handler: async (ctx, input: EventInput) => {
     validateEvent(input);
+    const cursor = await ctx.db
+      .query("indexerCursors")
+      .withIndex("by_pipeline_chain_contract", (q) =>
+        q
+          .eq("pipeline", "vault-events")
+          .eq("chainId", input.chainId)
+          .eq("contractAddressLower", input.vaultAddressLower),
+      )
+      .unique();
+    if (cursor?.state === "halted") throw new ConvexError({ code: "INDEXER_HALTED" });
     const existing = await ctx.db
       .query("chainEvents")
       .withIndex("by_event_inclusion", (queryBuilder) =>
@@ -283,8 +314,21 @@ export const setEventCanonicality = internalMutation({
     blockHashLower: v.string(),
     canonicality: v.union(v.literal("safe"), v.literal("orphaned")),
     observedAt: v.number(),
+    requireHalted: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    if (args.requireHalted) {
+      const cursor = await ctx.db
+        .query("indexerCursors")
+        .withIndex("by_pipeline_chain_contract", (q) =>
+          q
+            .eq("pipeline", "vault-events")
+            .eq("chainId", args.chainId)
+            .eq("contractAddressLower", args.vaultAddressLower),
+        )
+        .unique();
+      if (cursor?.state !== "halted") return { operation: "recovery_finished" as const };
+    }
     const event = await ctx.db
       .query("chainEvents")
       .withIndex("by_event_inclusion", (queryBuilder) =>
@@ -316,17 +360,25 @@ export const listEventsAboveBlock = internalQuery({
   },
   handler: async (ctx, args) => {
     const limit = Math.min(Math.max(Math.floor(args.limit), 1), 500);
-    const events = await ctx.db
-      .query("chainEvents")
-      .withIndex("by_block", (queryBuilder) =>
-        queryBuilder
-          .eq("chainId", args.chainId)
-          .eq("vaultAddressLower", args.vaultAddressLower)
-          .gt("blockNumber", args.aboveBlock),
-      )
-      .order("desc")
-      .take(limit);
-    return events.filter((event) => event.canonicality !== "orphaned");
+    const pages = await Promise.all(
+      (["safe", "tip"] as const).map((state) =>
+        ctx.db
+          .query("chainEvents")
+          .withIndex("by_canonicality", (q) =>
+            q
+              .eq("chainId", args.chainId)
+              .eq("vaultAddressLower", args.vaultAddressLower)
+              .eq("canonicality", state)
+              .gt("blockNumber", args.aboveBlock),
+          )
+          .order("desc")
+          .take(limit),
+      ),
+    );
+    return pages
+      .flat()
+      .sort((a, b) => b.blockNumber - a.blockNumber)
+      .slice(0, limit);
   },
 });
 

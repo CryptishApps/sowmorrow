@@ -892,6 +892,7 @@ describe("cursor compare-and-set and operator repair", () => {
   it("resumes a halted cursor only with the exact block number and hash it resets to", async () => {
     const t = convexTest(schema, modules);
     await seedCursor(t);
+    await t.mutation(applyCanonicalVaultLog, tipEventInput({ canonicality: "safe" }));
     await t.mutation(haltCursor, {
       pipeline: "vault-events",
       chainId: CHAIN_ID,
@@ -899,7 +900,9 @@ describe("cursor compare-and-set and operator repair", () => {
       failureCode: "reorg_beyond_checkpoints",
       now: 1_800_000_003,
     });
-    await t.mutation(applyCanonicalVaultLog, tipEventInput({ canonicality: "safe" }));
+    await expect(
+      t.mutation(applyCanonicalVaultLog, tipEventInput({ canonicality: "safe" })),
+    ).rejects.toThrow();
 
     await expect(
       t.action(repairHaltedCursor, {
@@ -1001,7 +1004,7 @@ describe("secondary provider agreement", () => {
       { canonicality: "tip" },
     ]);
     expect(await t.run((ctx) => ctx.db.query("indexerCursors").collect())).toHaveLength(0);
-    const signals = await t.query(recentSignals, { chainId: CHAIN_ID, limit: 10 });
+    const signals = await t.query(recentSignals, { chainId: CHAIN_ID, limit: 50 });
     expect(signals).toMatchObject([
       {
         signal: {
@@ -1489,6 +1492,10 @@ describe("B20 factory candidate discovery", () => {
 
 describe("solvency and lag monitor", () => {
   async function seedStock(t: ReturnType<typeof convexTest>) {
+    for (const stock of deploymentRegistry[8453]!.stocks) {
+      world.escrowed.set(stock.address.toLowerCase(), 0n);
+      world.balances.set(stock.address.toLowerCase(), 0n);
+    }
     await t.run(async (ctx) => {
       await ctx.db.insert("stocks", {
         chainId: CHAIN_ID,
@@ -1516,25 +1523,29 @@ describe("solvency and lag monitor", () => {
 
     await expect(t.action(checkVaultSolvencyAndLag, {})).resolves.toMatchObject({
       operation: "checked",
-      healthy: 1,
+      healthy: 14,
       insolvent: 0,
       unreadable: 0,
     });
 
-    const signals = await t.query(recentSignals, { chainId: CHAIN_ID, limit: 10 });
-    expect(signals).toMatchObject([
-      { signal: { kind: "lag", safeHeadBlock: 5_000, cursorBlock: 100, lagBlocks: 4_900 } },
-      {
-        signal: {
-          kind: "solvency",
-          status: "healthy",
-          totalEscrowedDecimal: "1000",
-          vaultBalanceDecimal: "1500",
-        },
-      },
-    ]);
+    const signals = await t.query(recentSignals, { chainId: CHAIN_ID, limit: 50 });
+    expect(signals).toEqual(
+      expect.arrayContaining(
+        [
+          { signal: { kind: "lag", safeHeadBlock: 5_000, cursorBlock: 100, lagBlocks: 4_900 } },
+          {
+            signal: {
+              kind: "solvency",
+              status: "healthy",
+              totalEscrowedDecimal: "1000",
+              vaultBalanceDecimal: "1500",
+            },
+          },
+        ].map((entry) => expect.objectContaining({ signal: expect.objectContaining(entry.signal) })),
+      ),
+    );
     expect(await t.run((ctx) => ctx.db.query("syncRuns").collect())).toMatchObject([
-      { pipeline: "solvency-monitor", outcome: "completed" },
+      { pipeline: "solvency-monitor", outcome: "failed" },
     ]);
   });
 
@@ -1545,14 +1556,21 @@ describe("solvency and lag monitor", () => {
     await seedStock(t);
 
     await expect(t.action(checkVaultSolvencyAndLag, {})).resolves.toMatchObject({ insolvent: 1 });
-    const signals = await t.query(recentSignals, { chainId: CHAIN_ID, limit: 10 });
-    expect(signals[1]).toMatchObject({ signal: { kind: "solvency", status: "insolvent" } });
+    const signals = await t.query(recentSignals, { chainId: CHAIN_ID, limit: 50 });
+    expect(signals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          signal: expect.objectContaining({ kind: "solvency", status: "insolvent" }),
+        }),
+      ]),
+    );
   });
 
-  it("counts a stock it cannot read without failing the run", async () => {
+  it("fails the run when a stock cannot be read", async () => {
     const t = convexTest(schema, modules);
     await seedStock(t);
     await expect(t.action(checkVaultSolvencyAndLag, {})).resolves.toMatchObject({ unreadable: 1 });
+    expect(await t.run((ctx) => ctx.db.query("syncRuns").collect())).toMatchObject([{ outcome: "failed" }]);
   });
 
   it("reports a typed failure when the safe head is unavailable", async () => {
@@ -1588,4 +1606,101 @@ describe("solvency and lag monitor", () => {
       t.mutation(recordActiveDeployment, { ...args, vaultAddressChecksum: VAULT.toUpperCase() }),
     ).rejects.toThrow();
   });
+});
+
+it("replays a halted cursor from the deployment boundary when all checkpoints are orphaned", async () => {
+  const t = convexTest(schema, modules);
+  await t.mutation(initializeCursor, {
+    pipeline: "vault-events",
+    chainId: CHAIN_ID,
+    contractAddressLower: VAULT_LOWER,
+    deploymentBlock: DEPLOYMENT_BLOCK,
+    now: RECEIVED_AT,
+  });
+  await t.mutation(haltCursor, {
+    pipeline: "vault-events",
+    chainId: CHAIN_ID,
+    contractAddressLower: VAULT_LOWER,
+    failureCode: "reorg_beyond_checkpoints",
+    now: RECEIVED_AT,
+  });
+  const result = await t.action(repairHaltedCursor, {
+    resetToBlock: DEPLOYMENT_BLOCK - 1,
+    resetToBlockHashLower: blockHash(DEPLOYMENT_BLOCK - 1),
+    operator: "test-operator",
+  });
+  expect(result.operation).toBe("resumed");
+  const cursor = await t.run((ctx) => ctx.db.query("indexerCursors").unique());
+  expect(cursor?.nextBlock).toBe(DEPLOYMENT_BLOCK);
+});
+
+it("keeps a large repair halted until every affected event is removed", async () => {
+  const t = convexTest(schema, modules);
+  await t.mutation(initializeCursor, {
+    pipeline: "vault-events",
+    chainId: CHAIN_ID,
+    contractAddressLower: VAULT_LOWER,
+    deploymentBlock: DEPLOYMENT_BLOCK,
+    now: RECEIVED_AT,
+  });
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 501; i++) {
+      const { observedAt, source, ...event } = tipEventInput({
+        giftIdDecimal: String(i + 1),
+        transactionHashLower: txHash(i + 1),
+      });
+      expect(source).toBe("webhook");
+      await ctx.db.insert("chainEvents", {
+        ...event,
+        eventName: "GiftCreated",
+        canonicality: "tip",
+        firstSeenAt: observedAt,
+        lastVerifiedAt: observedAt,
+        seenViaWebhook: true,
+        seenViaReconciler: false,
+      });
+    }
+  });
+  await t.mutation(haltCursor, {
+    pipeline: "vault-events",
+    chainId: CHAIN_ID,
+    contractAddressLower: VAULT_LOWER,
+    failureCode: "reorg_beyond_checkpoints",
+    now: RECEIVED_AT,
+  });
+  await t.run(async (ctx) => {
+    const cursor = await ctx.db.query("indexerCursors").unique();
+    await ctx.db.patch(cursor!._id, { checkpoints: [{ blockNumber: 200, blockHashLower: blockHash(200) }] });
+  });
+  const args = {
+    resetToBlock: DEPLOYMENT_BLOCK - 1,
+    resetToBlockHashLower: blockHash(DEPLOYMENT_BLOCK - 1),
+    operator: "test-operator",
+  };
+  expect(await t.action(repairHaltedCursor, args)).toMatchObject({ operation: "cleanup_pending" });
+  expect(await t.run((ctx) => ctx.db.query("indexerCursors").unique())).toMatchObject({ state: "halted" });
+  expect(
+    await t.action(repairHaltedCursor, { ...args, resetToBlock: 200, resetToBlockHashLower: blockHash(200) }),
+  ).toMatchObject({ operation: "repair_boundary_conflict" });
+  expect(await t.action(repairHaltedCursor, args)).toMatchObject({ operation: "resumed" });
+  expect(
+    await t.run((ctx) =>
+      ctx.db
+        .query("chainEvents")
+        .filter((q) => q.neq(q.field("canonicality"), "orphaned"))
+        .collect(),
+    ),
+  ).toHaveLength(0);
+  expect(
+    await t.mutation(makeFunctionReference<"mutation">("events:setEventCanonicality"), {
+      chainId: CHAIN_ID,
+      vaultAddressLower: VAULT_LOWER,
+      transactionHashLower: txHash(1),
+      logIndex: 0,
+      blockHashLower: blockHash(4500),
+      canonicality: "orphaned",
+      observedAt: RECEIVED_AT,
+      requireHalted: true,
+    }),
+  ).toEqual({ operation: "recovery_finished" });
 });

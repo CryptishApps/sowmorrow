@@ -32,6 +32,21 @@ export const checkVaultSolvencyAndLag = internalAction({
     const deployment = configuredDeployment();
     if (!deployment) return { operation: "not_configured" as const };
     const rpc = deployment.primary;
+    const alert = async (insolvent: number, unreadable: number, lagBlocks: number) => {
+      try {
+        const result = (await ctx.runAction(makeFunctionReference<"action">("monitorAlerts:deliver"), {
+          chainId: deployment.chainId,
+          vault: deployment.vaultAddress,
+          observedAt: startedAt,
+          insolvent,
+          unreadable,
+          lagBlocks,
+        })) as { operation: "delivered" | "not_configured" };
+        return result.operation;
+      } catch {
+        return "failed" as const;
+      }
+    };
 
     let safeHead: BlockRef;
     try {
@@ -46,14 +61,29 @@ export const checkVaultSolvencyAndLag = internalAction({
         outcome: "failed",
         errorCode: "rpc_failure",
       });
+      await alert(0, 1, 0);
       return { operation: "rpc_failure" as const };
     }
     const safeHeadBlock = safeNumber(safeHead.number);
 
-    const stocks = (await ctx.runQuery(listMonitoredStocksReference, {
-      chainId: deployment.chainId,
-      limit: MAX_MONITORED_STOCKS,
-    })) as MonitoredStock[];
+    let stocks: MonitoredStock[];
+    try {
+      stocks = (await ctx.runQuery(listMonitoredStocksReference, {
+        chainId: deployment.chainId,
+        limit: MAX_MONITORED_STOCKS,
+      })) as MonitoredStock[];
+    } catch {
+      await ctx.runMutation(recordSyncRunReference, {
+        pipeline: "solvency-monitor",
+        chainId: deployment.chainId,
+        contractAddressLower: deployment.vaultAddressLower,
+        startedAt,
+        endedAt: nowSeconds(),
+        outcome: "failed",
+      });
+      await alert(0, 1, 0);
+      return { operation: "coverage_failure" as const };
+    }
 
     let healthy = 0;
     let insolvent = 0;
@@ -70,8 +100,8 @@ export const checkVaultSolvencyAndLag = internalAction({
       let vaultBalance: bigint;
       try {
         [totalEscrowed, vaultBalance] = await Promise.all([
-          rpc.readTotalEscrowed(deployment.vaultAddress, token),
-          rpc.readTokenBalance(token, deployment.vaultAddress),
+          rpc.readTotalEscrowed(deployment.vaultAddress, token, safeHead.number),
+          rpc.readTokenBalance(token, deployment.vaultAddress, safeHead.number),
         ]);
       } catch {
         unreadable += 1;
@@ -112,6 +142,13 @@ export const checkVaultSolvencyAndLag = internalAction({
       },
     });
 
+    const lagBlocks = Math.max(safeHeadBlock - cursorBlock, 0);
+    const configuredLag = Number(process.env.SOWMORROW_MONITOR_MAX_LAG_BLOCKS ?? 1800);
+    const lagLimit = Number.isSafeInteger(configuredLag) && configuredLag > 0 ? configuredLag : 1800;
+    const degraded = unreadable > 0 || stocks.length === 0 || insolvent > 0 || lagBlocks > lagLimit;
+    const alertDelivery = degraded
+      ? await alert(insolvent, unreadable + (stocks.length === 0 ? 1 : 0), lagBlocks)
+      : "not_needed";
     await ctx.runMutation(recordSyncRunReference, {
       pipeline: "solvency-monitor",
       chainId: deployment.chainId,
@@ -119,8 +156,16 @@ export const checkVaultSolvencyAndLag = internalAction({
       startedAt,
       endedAt: nowSeconds(),
       safeHeadBlock,
-      outcome: "completed",
+      outcome: degraded ? "failed" : "completed",
     });
-    return { operation: "checked" as const, healthy, insolvent, unreadable, safeHeadBlock, cursorBlock };
+    return {
+      operation: "checked" as const,
+      healthy,
+      insolvent,
+      unreadable,
+      safeHeadBlock,
+      cursorBlock,
+      alertDelivery,
+    };
   },
 });

@@ -86,7 +86,7 @@ export function ConnectorPicker({ enabled }: { enabled: boolean }) {
   const connection = useConnection();
   const connectors = useConnectors();
   const connect = useConnect();
-  if (!enabled || connection.isConnected || connectors.length < 2) return null;
+  if (!enabled || connection.isConnected) return null;
   return (
     <div
       role="group"
@@ -95,6 +95,11 @@ export function ConnectorPicker({ enabled }: { enabled: boolean }) {
       className="flex flex-wrap items-center gap-2"
     >
       <span className="field-label text-[11px]">Wallet</span>
+      {connect.error && (
+        <p role="alert" className="text-[12px] text-poppy">
+          {friendlyError(connect.error)}
+        </p>
+      )}
       {connectors.map((connector) => (
         <button
           key={connector.uid}

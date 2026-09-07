@@ -1,3 +1,4 @@
+import { deploymentRegistry } from "../lib/contracts/manifests";
 import { ConvexError, v } from "convex/values";
 import { getAddress, isAddress, isHash } from "viem";
 import { internalMutation, internalQuery } from "./_generated/server";
@@ -164,6 +165,28 @@ export const haltCursor = internalMutation({
   },
 });
 
+export const beginHaltedRepair = internalMutation({
+  args: { ...cursorKey, resetToBlock: v.number() },
+  handler: async (ctx, args) => {
+    assertBlockNumber(args.resetToBlock);
+    const cursor = await ctx.db
+      .query("indexerCursors")
+      .withIndex("by_pipeline_chain_contract", (q) =>
+        q
+          .eq("pipeline", args.pipeline)
+          .eq("chainId", args.chainId)
+          .eq("contractAddressLower", args.contractAddressLower),
+      )
+      .unique();
+    if (!cursor) return { operation: "missing" as const };
+    if (cursor.state !== "halted") return { operation: "not_halted" as const };
+    if (cursor.repairFromBlock !== undefined && args.resetToBlock > cursor.repairFromBlock)
+      return { operation: "repair_boundary_conflict" as const };
+    await ctx.db.patch(cursor._id, { repairFromBlock: args.resetToBlock });
+    return { operation: "ready" as const };
+  },
+});
+
 export const resumeHaltedCursor = internalMutation({
   args: {
     ...cursorKey,
@@ -193,14 +216,35 @@ export const resumeHaltedCursor = internalMutation({
       (entry) =>
         entry.blockNumber === args.resetToBlock && entry.blockHashLower === args.resetToBlockHashLower,
     );
-    if (!known) throw new ConvexError({ code: "UNKNOWN_RESET_CHECKPOINT" });
+    const manifest = Object.values(deploymentRegistry).find((manifest) => manifest?.chainId === args.chainId);
+    const deploymentBoundary =
+      args.pipeline === "vault-events" &&
+      manifest?.vaultAddress?.toLowerCase() === args.contractAddressLower &&
+      args.resetToBlock === (manifest?.deploymentBlock ?? 0) - 1;
+    if (!known && !deploymentBoundary) throw new ConvexError({ code: "UNKNOWN_RESET_CHECKPOINT" });
+    if (cursor.repairFromBlock !== undefined && cursor.repairFromBlock !== args.resetToBlock)
+      return { operation: "repair_boundary_conflict" as const };
+    for (const canonicality of ["safe", "tip"] as const) {
+      const remaining = await ctx.db
+        .query("chainEvents")
+        .withIndex("by_canonicality", (q) =>
+          q
+            .eq("chainId", args.chainId)
+            .eq("vaultAddressLower", args.contractAddressLower)
+            .eq("canonicality", canonicality)
+            .gt("blockNumber", args.resetToBlock),
+        )
+        .first();
+      if (remaining) return { operation: "cleanup_pending" as const };
+    }
     await ctx.db.patch(cursor._id, {
       nextBlock: args.resetToBlock + 1,
       lastCommittedBlock: args.resetToBlock,
       lastCommittedBlockHashLower: args.resetToBlockHashLower,
-      checkpoints: cursor.checkpoints.filter((entry) => entry.blockNumber <= args.resetToBlock),
+      checkpoints: [{ blockNumber: args.resetToBlock, blockHashLower: args.resetToBlockHashLower }],
       state: "active",
       failureCode: undefined,
+      repairFromBlock: undefined,
       repairedBy: args.operator,
       repairedAt: args.now,
       updatedAt: args.now,

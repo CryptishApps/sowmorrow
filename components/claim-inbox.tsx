@@ -3,15 +3,8 @@
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
-import {
-  useConnect,
-  useConnection,
-  useConnectors,
-  usePublicClient,
-  useSwitchChain,
-  useWriteContract,
-} from "wagmi";
-import { formatUnits } from "viem";
+import { useConnection, usePublicClient, useSwitchChain, useWriteContract } from "wagmi";
+import { formatUnits, zeroAddress } from "viem";
 import type { Address, Hash } from "viem";
 import { claimEntrance, entranceItem, useEntranceSettled } from "@/components/entrance";
 import type { Entrance } from "@/components/entrance";
@@ -33,6 +26,7 @@ import { ib20Abi, ib20AssetAbi, sowmorrowVaultAbi } from "@/lib/contracts/genera
 import { decodePendingClaim, encodePendingClaim, pendingClaimStorageKey } from "@/lib/contracts/pending";
 import type { PendingClaimSubmission } from "@/lib/contracts/pending";
 import { proveGiftClaimed } from "@/lib/contracts/receipts";
+import type { MirrorGiftRow } from "@/lib/convex/api";
 import { mirrorApi, mirrorConfigured } from "@/lib/convex/api";
 import { useMirrorQuery } from "@/lib/convex/provider";
 import {
@@ -53,9 +47,10 @@ import {
 } from "@/lib/web3/inbox";
 import type { ExclusionReason, GiftRow, GiftRowState, InboxGift, MirrorGift } from "@/lib/web3/inbox";
 import { readReceiptWithFallback, secondaryPublicClient } from "@/lib/web3/secondary";
+import { transactionDataSuffix } from "@/lib/web3/attribution";
 import { stocks } from "@/lib/stocks";
 
-type Props = { deployment: AppDeployment; entrance: Entrance; onClaim: () => void };
+type Props = { deployment: AppDeployment; entrance: Entrance; onClaim: () => void; giftId?: string };
 
 type GiftStruct = {
   sender: Address;
@@ -130,10 +125,22 @@ function writePendingClaim(key: string | null, claim: PendingClaimSubmission | n
   } catch {}
 }
 
-function useInbox(deployment: AppDeployment, recipient: Address | undefined) {
+function useInbox(
+  deployment: AppDeployment,
+  recipient: Address | undefined,
+  indexed: readonly MirrorGiftRow[],
+  giftId?: string,
+) {
   const client = usePublicClient({ chainId: deployment.chainId });
   return useInfiniteQuery({
-    queryKey: ["gift-inbox", deployment.chainId, deployment.vaultAddress, recipient],
+    queryKey: [
+      "gift-inbox",
+      deployment.chainId,
+      deployment.vaultAddress,
+      recipient,
+      indexed.map((gift) => gift.giftIdDecimal),
+      giftId,
+    ],
     enabled:
       client !== undefined &&
       recipient !== undefined &&
@@ -158,24 +165,48 @@ function useInbox(deployment: AppDeployment, recipient: Address | undefined) {
       const span = BLOCK_PAGE_SPAN - 1n;
       const fromBlock = toBlock - deploymentBlock > span ? toBlock - span : deploymentBlock;
 
-      const page = await readLogRange(
-        (from, to) =>
-          client.getContractEvents({
-            address: vaultAddress,
-            abi: sowmorrowVaultAbi,
-            eventName: "GiftCreated",
-            args: { recipient },
-            fromBlock: from,
-            toBlock: to,
-            strict: true,
-          }),
-        fromBlock,
-        toBlock,
-        MAX_LOGS_PER_PAGE,
-      );
+      const page = giftId
+        ? { logs: [], nextToBlock: null }
+        : await readLogRange(
+            (from, to) =>
+              client.getContractEvents({
+                address: vaultAddress,
+                abi: sowmorrowVaultAbi,
+                eventName: "GiftCreated",
+                args: { recipient },
+                fromBlock: from,
+                toBlock: to,
+                strict: true,
+              }),
+            fromBlock,
+            toBlock,
+            MAX_LOGS_PER_PAGE,
+          );
       const olderCursor = fromBlock > deploymentBlock ? fromBlock - 1n : null;
-      const nextToBlock = page.nextToBlock ?? olderCursor;
-      const logs = page.logs;
+      const nextToBlock = giftId ? null : (page.nextToBlock ?? olderCursor);
+      const logs = page.logs.map((log) => ({ args: { ...log.args } }));
+      if (pageParam === null) {
+        const seen = new Set(logs.map((log) => log.args.giftId.toString()));
+        for (const gift of giftId
+          ? [{ giftIdDecimal: giftId, vaultAddressLower: vaultAddress.toLowerCase() }]
+          : indexed) {
+          if (gift.vaultAddressLower !== vaultAddress.toLowerCase() || seen.has(gift.giftIdDecimal)) continue;
+          const giftId = BigInt(gift.giftIdDecimal);
+          if (giftId <= 0n || giftId >= 1n << 256n) continue;
+          seen.add(gift.giftIdDecimal);
+          logs.push({
+            args: {
+              giftId,
+              sender: zeroAddress,
+              recipient,
+              stock: zeroAddress,
+              amountRaw: 0n,
+              unlockAt: 0n,
+              noteHash: `0x${"0".repeat(64)}`,
+            },
+          });
+        }
+      }
       if (logs.length === 0) {
         return {
           gifts: [],
@@ -204,6 +235,10 @@ function useInbox(deployment: AppDeployment, recipient: Address | undefined) {
         )
       ) {
         throw new Error("The vault returned a gift addressed to a different recipient");
+      }
+
+      for (const [index, result] of giftResults.entries()) {
+        if (result.status === "success") logs[index].args = { ...logs[index].args, ...result.result };
       }
 
       const uniqueStocks = [...new Set(logs.map((log) => log.args.stock.toLowerCase()))].map(
@@ -288,7 +323,9 @@ function useInbox(deployment: AppDeployment, recipient: Address | undefined) {
             chainGift?.status === "success"
               ? chainGift.result.status === 2
                 ? ("claimed" as const)
-                : ("active" as const)
+                : chainGift.result.status === 1
+                  ? ("active" as const)
+                  : null
               : null,
           chainUnlockAt: chainGift?.status === "success" ? chainGift.result.unlockAt : null,
           supported: supportByStock.get(stockLower) ?? null,
@@ -378,22 +415,21 @@ function GiftRowItem({
   );
 }
 
-export function ClaimFace({ deployment, entrance, onClaim }: Props) {
+function ClaimSession({ deployment, entrance, onClaim, giftId }: Props) {
   const connection = useConnection();
-  const connectors = useConnectors();
-  const connect = useConnect();
   const switchChain = useSwitchChain();
   const write = useWriteContract();
   const reduceMotion = useReducedMotion();
   const entranceState = useEntranceSettled(reduceMotion);
   const client = usePublicClient({ chainId: deployment.chainId });
   const queryClient = useQueryClient();
-  const inbox = useInbox(deployment, connection.address);
+
   const [phase, setPhase] = useState<ClaimPhase | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastHash, setLastHash] = useState<Hash | null>(null);
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set(giftId ? [giftId] : []));
   const [showSmall, setShowSmall] = useState(false);
+  const [scanRemaining, setScanRemaining] = useState(0);
   const [retryGroups, setRetryGroups] = useState<{ key: string; symbol: string; ids: bigint[] }[]>([]);
   const [pendingClaim, setPendingClaim] = useState<PendingClaimSubmission | null>(null);
   const busy = phase !== null && phase !== "success";
@@ -407,29 +443,54 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
     let current = true;
     queueMicrotask(() => {
       const persisted = readPendingClaim(storageKey);
-      if (current && persisted) setPendingClaim(persisted);
+      if (current) setPendingClaim(persisted);
     });
     return () => {
       current = false;
     };
   }, [storageKey]);
 
+  const [mirrorCursor, setMirrorCursor] = useState<string | null>(null);
+  const [indexedPages, setIndexedPages] = useState<MirrorGiftRow[]>([]);
   const mirrorGifts = useMirrorQuery(
     mirrorApi.giftsForRecipient,
     connection.address
       ? {
           chainId: deployment.chainId,
           recipientLower: connection.address.toLowerCase(),
-          paginationOpts: { numItems: 100, cursor: null },
+          paginationOpts: { numItems: 100, cursor: mirrorCursor },
         }
       : null,
   );
+  const indexedGifts = useMemo(
+    () => [...indexedPages, ...(mirrorGifts.data?.page ?? [])],
+    [indexedPages, mirrorGifts.data],
+  );
+  const loadIndexedPage = () => {
+    const page = mirrorGifts.data;
+    if (!page || page.isDone || !page.continueCursor || page.continueCursor === mirrorCursor) return;
+    setIndexedPages(indexedGifts);
+    setMirrorCursor(page.continueCursor);
+  };
+  const inbox = useInbox(deployment, connection.address, indexedGifts, giftId);
+  useEffect(() => {
+    if (scanRemaining <= 0 || inbox.isFetching || !inbox.hasNextPage || inbox.isError) return;
+    let current = true;
+    queueMicrotask(() => {
+      if (!current) return;
+      setScanRemaining((remaining) => remaining - 1);
+      void inbox.fetchNextPage();
+    });
+    return () => {
+      current = false;
+    };
+  }, [scanRemaining, inbox]);
   const mirrorFreshness = useMirrorQuery(mirrorApi.freshness, { chainId: deployment.chainId });
 
   const mirrorById = useMemo(() => {
     const entries = new Map<string, MirrorGift>();
     const vaultLower = deployment.vaultAddress?.toLowerCase();
-    for (const row of mirrorGifts.data?.page ?? []) {
+    for (const row of indexedGifts) {
       if (vaultLower !== undefined && row.vaultAddressLower !== vaultLower) continue;
       entries.set(row.giftIdDecimal, {
         giftId: BigInt(row.giftIdDecimal),
@@ -439,7 +500,7 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
       });
     }
     return entries;
-  }, [mirrorGifts.data, deployment.vaultAddress]);
+  }, [indexedGifts, deployment.vaultAddress]);
 
   const pages = useMemo(() => inbox.data?.pages ?? [], [inbox.data]);
   const maxBatch = pages[0]?.maxBatch ?? DEFAULT_MAX_BATCH;
@@ -464,14 +525,14 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
       .sort(compareRows);
   }, [pages, blockTimestamp, confirmingIds, mirrorGifts.connected, mirrorGifts.error, mirrorById]);
 
-  const mirrorSenders = useMemo(
-    () => (mirrorGifts.data?.page ?? []).map((row) => row.senderLower),
-    [mirrorGifts.data],
-  );
+  const mirrorSenders = useMemo(() => indexedGifts.map((row) => row.senderLower), [indexedGifts]);
 
   const partition = useMemo(
-    () => partitionSmallGifts(rows, smallAmountThresholds(rows), knownCounterparties(rows, mirrorSenders)),
-    [rows, mirrorSenders],
+    () =>
+      giftId
+        ? { primary: rows, small: [] }
+        : partitionSmallGifts(rows, smallAmountThresholds(rows), knownCounterparties(rows, mirrorSenders)),
+    [rows, mirrorSenders, giftId],
   );
 
   const primaryGroups = useMemo(() => groupByStock(partition.primary), [partition.primary]);
@@ -533,6 +594,8 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
               args: [giftId],
             });
             const submitted = await write.mutateAsync({
+              dataSuffix: transactionDataSuffix,
+              account,
               address: vaultAddress,
               abi: sowmorrowVaultAbi,
               functionName: "claim",
@@ -551,6 +614,8 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
               args: [[...ids]],
             });
             const submitted = await write.mutateAsync({
+              dataSuffix: transactionDataSuffix,
+              account,
               address: vaultAddress,
               abi: sowmorrowVaultAbi,
               functionName: "claimMany",
@@ -608,17 +673,18 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
         [client, secondaryPublicClient(deployment.chainId)],
         pendingClaim.hash,
       );
-      const expected = pendingClaim.giftIds.flatMap((giftId) => {
-        const row = rows.find((candidate) => candidate.id === giftId);
-        return row && connection.address
-          ? [{ giftId, recipient: connection.address, stock: row.stock, amountRaw: row.amountRaw }]
-          : [];
-      });
-      if (expected.length === pendingClaim.giftIds.length) {
-        proveGiftClaimed(receipt, pendingClaim.vault, expected);
-      } else if (receipt.status !== "success") {
-        throw new Error("The submitted claim reverted");
-      }
+      const expected = await Promise.all(
+        pendingClaim.giftIds.map(async (giftId) => {
+          const gift = await client.readContract({
+            address: pendingClaim.vault,
+            abi: sowmorrowVaultAbi,
+            functionName: "getGift",
+            args: [giftId],
+          });
+          return { giftId, recipient: pendingClaim.account, stock: gift.stock, amountRaw: gift.amountRaw };
+        }),
+      );
+      proveGiftClaimed(receipt, pendingClaim.vault, expected);
       setPendingClaim(null);
       writePendingClaim(storageKey, null);
       setPhase("success");
@@ -633,9 +699,7 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
 
   const act = () => {
     if (!connection.isConnected) {
-      const connector = connectors[0];
-      if (connector) connect.mutate({ connector });
-      else setError("No compatible browser wallet was found.");
+      document.querySelector<HTMLButtonElement>('[data-testid="connector-picker"] button')?.focus();
       return;
     }
     if (connection.chainId !== deployment.chainId) {
@@ -698,7 +762,9 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
       >
         <motion.div variants={entranceItem} className="flex items-end justify-between gap-4">
           <div>
-            <p className="display text-[25px] leading-tight text-ink">Your planted gifts</p>
+            <p className="display text-[25px] leading-tight text-ink">
+              {giftId ? "Claim this gift" : "Your planted gifts"}
+            </p>
             <p className="mt-1 text-[12px] text-ink-soft">
               Claiming never closes, even if new planting is paused.
             </p>
@@ -706,12 +772,13 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
           {inbox.isFetching && <Spinner />}
         </motion.div>
 
-        {(!mirrorConfigured || !mirrorGifts.connected || mirrorGifts.error !== null) && (
+        {!giftId && (!mirrorConfigured || !mirrorGifts.connected || mirrorGifts.error !== null) && (
           <motion.div variants={entranceItem}>
             <MirrorNotice />
           </motion.div>
         )}
-        {mirrorGifts.connected &&
+        {!giftId &&
+          mirrorGifts.connected &&
           mirrorGifts.error === null &&
           (mirrorFreshness.data?.lagBlocks ?? 0) > 0 && (
             <motion.div variants={entranceItem}>
@@ -838,15 +905,21 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
               )}
             </div>
           )}
+          {mirrorGifts.data?.isDone === false && (
+            <button type="button" onClick={loadIndexedPage} className="chip">
+              Load more saved gifts
+            </button>
+          )}
           {inbox.hasNextPage && !inbox.isPending && !inbox.isError && (
             <button
               type="button"
-              onClick={() => void inbox.fetchNextPage()}
-              disabled={inbox.isFetchingNextPage}
+              onClick={() => setScanRemaining((remaining) => (remaining > 0 ? 0 : 100))}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-ink/10 px-3 py-2 text-[11px] font-extrabold text-sky-deep disabled:opacity-60"
             >
               {inbox.isFetchingNextPage && <Spinner />}
-              {inbox.isFetchingNextPage ? "Checking older blocks" : "Load older gifts"}
+              {scanRemaining > 0
+                ? `Stop searching older gifts (${100 - scanRemaining}/100 ranges)`
+                : "Load older gifts"}
             </button>
           )}
         </motion.div>
@@ -923,5 +996,15 @@ export function ClaimFace({ deployment, entrance, onClaim }: Props) {
         </button>
       </motion.div>
     </motion.section>
+  );
+}
+
+export function ClaimFace(props: Props) {
+  const connection = useConnection();
+  return (
+    <ClaimSession
+      key={`${props.deployment.chainId}:${props.deployment.vaultAddress}:${connection.chainId}:${connection.address}`}
+      {...props}
+    />
   );
 }

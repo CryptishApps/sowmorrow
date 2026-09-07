@@ -20,7 +20,15 @@ function transport(chainId: number, primaryUrl: string | undefined): Transport {
 
 export const wagmiConfig = createConfig({
   chains: [base, baseSepolia, foundry, mainnet],
-  connectors: [injected(), coinbaseWallet({ appName: "Sowmorrow", preference: { options: "all" } })],
+  multiInjectedProviderDiscovery: false,
+  connectors: [
+    injected({ target: "metaMask" }),
+    coinbaseWallet({
+      appName: "Sowmorrow",
+      appLogoUrl: "https://www.sowmorrow.app/wallet-icon.svg",
+      preference: { options: "all" },
+    }),
+  ],
   transports: {
     [base.id]: transport(base.id, process.env.NEXT_PUBLIC_BASE_RPC_URL),
     [baseSepolia.id]: transport(baseSepolia.id, process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL),

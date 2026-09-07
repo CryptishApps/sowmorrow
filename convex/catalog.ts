@@ -1,3 +1,4 @@
+import { deploymentRegistry } from "../lib/contracts/manifests";
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { getAddress, isAddress } from "viem";
@@ -239,11 +240,44 @@ export const listMonitoredStocks = internalQuery({
         queryBuilder.eq("chainId", chainId).eq("reviewStatus", "retired"),
       )
       .take(Math.max(bounded - verified.length, 1));
-    return [...verified, ...retired].map((stock) => ({
-      addressLower: stock.addressLower,
-      addressChecksum: stock.addressChecksum,
-      symbol: stock.symbol,
-    }));
+    const assets = new Map(
+      [...verified, ...retired].map((stock) => [
+        stock.addressLower,
+        {
+          addressLower: stock.addressLower,
+          addressChecksum: stock.addressChecksum,
+          symbol: stock.symbol,
+        },
+      ]),
+    );
+    for (const stock of Object.values(deploymentRegistry).find((manifest) => manifest?.chainId === chainId)
+      ?.stocks ?? []) {
+      assets.set(stock.address.toLowerCase(), {
+        addressLower: stock.address.toLowerCase(),
+        addressChecksum: stock.address,
+        symbol: stock.symbol,
+      });
+    }
+    let afterStock = "";
+    for (;;) {
+      const gift = await ctx.db
+        .query("gifts")
+        .withIndex("by_chain_stock", (q) => q.eq("chainId", chainId).gt("stockLower", afterStock))
+        .first();
+      if (!gift) break;
+      afterStock = gift.stockLower;
+      if (!assets.has(afterStock))
+        assets.set(afterStock, {
+          addressLower: afterStock,
+          addressChecksum: getAddress(afterStock),
+          symbol: "B20",
+        });
+      if (assets.size > bounded) throw new ConvexError({ code: "MONITOR_CAPACITY_EXCEEDED" });
+    }
+    if (assets.size > bounded || verified.length === bounded || retired.length === bounded) {
+      throw new ConvexError({ code: "MONITOR_CAPACITY_EXCEEDED" });
+    }
+    return [...assets.values()];
   },
 });
 

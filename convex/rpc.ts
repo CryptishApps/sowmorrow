@@ -92,8 +92,8 @@ export type ChainRpc = {
   }) => Promise<FactoryCreationLog[]>;
   readTokenIdentity: (token: Address) => Promise<TokenIdentity>;
   readIsInitializedB20: (factory: Address, token: Address) => Promise<boolean>;
-  readTotalEscrowed: (vault: Address, stock: Address) => Promise<bigint>;
-  readTokenBalance: (token: Address, holder: Address) => Promise<bigint>;
+  readTotalEscrowed: (vault: Address, stock: Address, blockNumber?: bigint) => Promise<bigint>;
+  readTokenBalance: (token: Address, holder: Address, blockNumber?: bigint) => Promise<bigint>;
 };
 
 export function primaryRpcUrl(chainId: number) {
@@ -225,14 +225,21 @@ export function createChainRpc(chainId: number, url: string): ChainRpc {
       ]);
       return isB20 && isInitialized;
     },
-    readTotalEscrowed: (vault, stock) =>
+    readTotalEscrowed: (vault, stock, blockNumber) =>
       client.readContract({
         address: vault,
         abi: sowmorrowVaultAbi,
         functionName: "totalEscrowed",
+        blockNumber,
         args: [stock],
       }),
-    readTokenBalance: (token, holder) =>
-      client.readContract({ address: token, abi: ib20AssetAbi, functionName: "balanceOf", args: [holder] }),
+    readTokenBalance: (token, holder, blockNumber) =>
+      client.readContract({
+        address: token,
+        abi: ib20AssetAbi,
+        functionName: "balanceOf",
+        blockNumber,
+        args: [holder],
+      }),
   };
 }

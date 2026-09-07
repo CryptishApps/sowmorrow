@@ -1,3 +1,4 @@
+import { noteMatchesGift } from "./noteIntegrity";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
@@ -55,7 +56,10 @@ export const detail = query({
       .unique();
     return {
       gift,
-      note: note ? { noteUtf8: note.noteUtf8, noteHashLower: note.noteHashLower } : null,
+      note:
+        note && noteMatchesGift(note, gift)
+          ? { noteUtf8: note.noteUtf8, noteHashLower: note.noteHashLower }
+          : null,
     };
   },
 });

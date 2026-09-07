@@ -104,6 +104,7 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
 
       - run: npm run test:e2e
+      - run: npm run test:e2e:enabled
 
       - name: Upload Playwright report
         if: failure()
@@ -150,6 +151,9 @@ jobs:
           FOUNDRY_PROFILE: ci
         run: forge test --root contracts -vvv
 
+      - name: Run the native Base lane
+        run: ./scripts/contracts/test-native.sh
+
       - name: Measure vault coverage
         run: forge coverage --root contracts --match-contract SowmorrowVaultTest --report lcov --report-file coverage.lcov
 
@@ -188,6 +192,7 @@ jobs:
       - run: npm ci
 
       - run: npm run contracts:slither
+      - run: npm run contracts:echidna
 
       - name: Upload Slither report
         if: always()

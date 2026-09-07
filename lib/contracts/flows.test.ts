@@ -364,3 +364,21 @@ describe("executeClaim", () => {
     expect(phases).toEqual(["awaiting_claim", "confirming_claim", "success"]);
   });
 });
+
+it("changing multiplier during approval requires another review", async () => {
+  const gateway = plantGateway();
+  gateway.waitForApprovalReceipt = vi.fn(async () => {
+    gateway.toScaledBalance.mockResolvedValue(500000n);
+  });
+  const intent = await preparePlant(gateway, {
+    account,
+    stock,
+    vault,
+    recipientInput: recipient,
+    amountInput: "0.25",
+    unlockAt: 2000000000n,
+    noteHash: `0x${"0".repeat(64)}`,
+  });
+  await expect(executePreparedPlant(gateway, intent)).rejects.toMatchObject({ code: "review_changed" });
+  expect(gateway.createGift).not.toHaveBeenCalled();
+});

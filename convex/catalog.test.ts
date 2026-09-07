@@ -299,6 +299,14 @@ describe("monitored stock list", () => {
     await t.mutation(approveReviewedStock, approval({ addressChecksum: AMAZON, intent: "retire" }));
 
     const monitored = await t.query(listMonitoredStocks, { chainId: 8453, limit: 50 });
-    expect(monitored.map((entry: { symbol: string }) => entry.symbol).sort()).toEqual(["AAPLc", "AMZNc"]);
+    expect(monitored.map((entry: { symbol: string }) => entry.symbol).sort()).toEqual(
+      expect.arrayContaining(["AAPLc", "AMZNc"]),
+    );
   });
+});
+
+it("monitors Sepolia manifest assets before the catalog has been seeded", async () => {
+  const t = convexTest(schema, modules);
+  const assets = await t.query(listMonitoredStocks, { chainId: 84532, limit: 50 });
+  expect(assets).toHaveLength(13);
 });

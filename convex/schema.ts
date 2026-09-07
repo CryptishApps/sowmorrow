@@ -187,6 +187,7 @@ export default defineSchema({
     projectionVersion: v.number(),
   })
     .index("by_gift_key", ["chainId", "vaultAddressLower", "giftIdDecimal"])
+    .index("by_chain_stock", ["chainId", "stockLower"])
     .index("by_recipient_chain", ["recipientLower", "chainId", "unlockAt"])
     .index("by_sender_chain", ["senderLower", "chainId", "createdBlock"]),
 
@@ -243,6 +244,7 @@ export default defineSchema({
     checkpoints: v.array(v.object({ blockNumber: v.number(), blockHashLower: v.string() })),
     state: v.union(v.literal("active"), v.literal("halted")),
     failureCode: v.optional(cursorFailureCode),
+    repairFromBlock: v.optional(v.number()),
     repairedBy: v.optional(v.string()),
     repairedAt: v.optional(v.number()),
     updatedAt: v.number(),

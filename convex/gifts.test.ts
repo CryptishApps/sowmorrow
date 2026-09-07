@@ -1,3 +1,4 @@
+import { keccak256, stringToBytes } from "viem";
 import { makeFunctionReference } from "convex/server";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -38,7 +39,7 @@ function created(index: number) {
     stockLower: STOCK.toLowerCase(),
     amountRawDecimal: "1000",
     unlockAt: 1_900_000_000 + index,
-    noteHashLower: `0x${"7".repeat(64)}`,
+    noteHashLower: keccak256(stringToBytes("grow slowly")),
     canonicality: "safe" as const,
     source: "reconciler" as const,
     observedAt: 1_800_000_000,
@@ -133,7 +134,7 @@ describe("gift detail", () => {
         vaultAddressLower: VAULT_LOWER,
         giftIdDecimal: "1",
         noteUtf8: "grow slowly",
-        noteHashLower: `0x${"7".repeat(64)}`,
+        noteHashLower: keccak256(stringToBytes("grow slowly")),
         byteLength: 11,
         createdTxHashLower: `0x${"1".padStart(64, "0")}`,
         createdLogIndex: 0,

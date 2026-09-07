@@ -1,6 +1,7 @@
 import { getAddress, isAddress, isHash } from "viem";
 import type { Address, Hash, Hex } from "viem";
 import { z } from "zod";
+import { isGiftNoteValid, MAX_GIFT_NOTE_BYTES } from "@/lib/gifts";
 import { stocks } from "@/lib/stocks";
 import type { StockSymbol } from "@/lib/stocks";
 
@@ -27,6 +28,8 @@ export type PendingGiftSubmission = PendingBase & {
   noteHash: Hex;
   amountInput: string;
   transferableAmount: string;
+  note?: string;
+  giftId?: bigint;
 };
 
 export type PendingPlantSubmission = PendingApprovalSubmission | PendingGiftSubmission;
@@ -72,6 +75,8 @@ const wireSchema = z.discriminatedUnion("kind", [
       noteHash: hash.transform((value) => value as Hex),
       amountInput: z.string().min(1).max(256),
       transferableAmount: z.string().min(1).max(256),
+      note: z.string().max(MAX_GIFT_NOTE_BYTES).refine(isGiftNoteValid).optional(),
+      giftId: uint.optional(),
     })
     .strict(),
 ]);
@@ -80,7 +85,9 @@ export function encodePendingGift(pending: PendingPlantSubmission): string {
   return JSON.stringify({
     ...pending,
     amountRaw: pending.amountRaw.toString(),
-    ...(pending.kind === "gift" ? { unlockAt: pending.unlockAt.toString() } : {}),
+    ...(pending.kind === "gift"
+      ? { unlockAt: pending.unlockAt.toString(), giftId: pending.giftId?.toString() }
+      : {}),
   });
 }
 

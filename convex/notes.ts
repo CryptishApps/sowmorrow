@@ -1,3 +1,4 @@
+import { noteMatchesGift } from "./noteIntegrity";
 import { ConvexError, v } from "convex/values";
 import { keccak256, stringToBytes } from "viem";
 import { mutation, query } from "./_generated/server";
@@ -51,11 +52,19 @@ export const attachNote = mutation({
           .eq("giftIdDecimal", key.giftIdDecimal),
       )
       .unique();
-    if (existing) {
-      if (existing.noteHashLower !== noteHashLower) throw new ConvexError({ code: "NOTE_HASH_MISMATCH" });
+    if (
+      existing &&
+      existing.createdTxHashLower === gift.createdTxHashLower &&
+      existing.createdLogIndex === gift.createdLogIndex &&
+      existing.noteHashLower !== noteHashLower
+    ) {
+      throw new ConvexError({ code: "NOTE_HASH_MISMATCH" });
+    }
+    if (existing && noteMatchesGift(existing, gift)) {
       return { operation: "unchanged" as const };
     }
 
+    if (existing) await ctx.db.delete(existing._id);
     await ctx.db.insert("noteAttachments", {
       ...key,
       noteUtf8: note,
@@ -83,7 +92,16 @@ export const noteForGift = query({
           .eq("giftIdDecimal", key.giftIdDecimal),
       )
       .unique();
-    if (!attachment) return null;
+    const gift = await ctx.db
+      .query("gifts")
+      .withIndex("by_gift_key", (q) =>
+        q
+          .eq("chainId", key.chainId)
+          .eq("vaultAddressLower", key.vaultAddressLower)
+          .eq("giftIdDecimal", key.giftIdDecimal),
+      )
+      .unique();
+    if (!attachment || !gift || !noteMatchesGift(attachment, gift)) return null;
     return {
       noteUtf8: attachment.noteUtf8,
       noteHashLower: attachment.noteHashLower,

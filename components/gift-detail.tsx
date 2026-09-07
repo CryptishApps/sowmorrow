@@ -5,6 +5,9 @@ import Link from "next/link";
 import { usePublicClient } from "wagmi";
 import { formatUnits } from "viem";
 import type { Address } from "viem";
+import { ClaimFace } from "@/components/claim-inbox";
+import { getAppDeployment } from "@/lib/contracts/config";
+import { hashGiftNote } from "@/lib/gifts";
 import { MirrorNotice, shortAddress, Spinner, StockDot } from "@/components/gift-chrome";
 import { HeroBackdrop } from "@/components/hero-backdrop";
 import { Logo } from "@/components/logo";
@@ -23,6 +26,7 @@ type GiftReading = {
   unlockAt: bigint;
   status: number;
   amountRaw: bigint;
+  noteHash: `0x${string}`;
   amountScaled: bigint | null;
   decimals: number | null;
   blockTimestamp: bigint;
@@ -58,6 +62,7 @@ function BackLink() {
 
 export function GiftDetail({ target }: { target: GiftRouteTarget }) {
   const client = usePublicClient({ chainId: target.chainId });
+  const deployment = getAppDeployment();
   const readable = target.manifestStatus !== "pending";
 
   const gift = useQuery({
@@ -94,6 +99,7 @@ export function GiftDetail({ target }: { target: GiftRouteTarget }) {
         unlockAt: reading.unlockAt,
         status: reading.status,
         amountRaw: reading.amountRaw,
+        noteHash: reading.noteHash,
         amountScaled,
         decimals,
         blockTimestamp: block.timestamp,
@@ -231,7 +237,7 @@ export function GiftDetail({ target }: { target: GiftRouteTarget }) {
         </div>
       </dl>
 
-      {mirror.data?.note ? (
+      {mirror.data?.note && gift.data && hashGiftNote(mirror.data.note.noteUtf8) === gift.data.noteHash ? (
         <section aria-label="Attached note" className="mt-4 rounded-2xl bg-sun/18 p-3">
           <p className="text-[11px] font-extrabold text-ink">The note that came with it</p>
           <p className="mt-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-ink">
@@ -246,6 +252,17 @@ export function GiftDetail({ target }: { target: GiftRouteTarget }) {
         )
       )}
 
+      {deployment.writesEnabled &&
+        deployment.chainId === target.chainId &&
+        deployment.vaultAddress === target.vault &&
+        gift.data.status === 1 && (
+          <ClaimFace
+            deployment={deployment}
+            entrance="load"
+            giftId={target.giftId}
+            onClaim={() => void gift.refetch()}
+          />
+        )}
       <BackLink />
     </Shell>
   );

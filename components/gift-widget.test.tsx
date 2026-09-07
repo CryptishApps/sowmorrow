@@ -290,8 +290,7 @@ describe("Plant state machine", () => {
     await user.click(screen.getByRole("button", { name: "Review gift" }));
 
     const review = await screen.findByRole("region", { name: "Gift review" });
-    expect(within(review).getByText("0x2222…2222")).toBeInTheDocument();
-    expect(within(review).queryByText(recipient)).not.toBeInTheDocument();
+    expect(within(review).getByText(recipient)).toBeInTheDocument();
     expect(within(review).queryByText(/raw units/)).not.toBeInTheDocument();
     expect(within(review).queryByText("Technical details")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm and plant" })).toBeEnabled();
@@ -342,7 +341,7 @@ describe("Plant state machine", () => {
     await user.click(screen.getByRole("button", { name: "Review gift" }));
     await screen.findByRole("region", { name: "Gift review" });
 
-    expect(screen.getByText("This recipient is a contract, not a wallet.")).toBeInTheDocument();
+    expect(screen.getByText("This address uses a smart contract.")).toBeInTheDocument();
     const confirm = screen.getByRole("button", { name: "Confirm and plant" });
     expect(confirm).toBeDisabled();
 
@@ -406,7 +405,7 @@ describe("Plant state machine", () => {
     await fillDraft(user);
     await user.click(screen.getByRole("button", { name: "Review gift" }));
     await screen.findByRole("region", { name: "Gift review" });
-    expect(screen.queryByText("This recipient is a contract, not a wallet.")).not.toBeInTheDocument();
+    expect(screen.queryByText("This address uses a smart contract.")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Confirm and plant" }));
 
@@ -466,7 +465,7 @@ describe("Plant state machine", () => {
         note,
       }),
     );
-    expect(await screen.findByText("The note is saved for the recipient to read.")).toBeInTheDocument();
+    expect(await screen.findByText("The public note is saved.")).toBeInTheDocument();
   });
 
   it("recovers a gift transaction persisted by an earlier session", async () => {
@@ -703,4 +702,94 @@ describe("Claim inbox", () => {
 
     expect(await screen.findByTestId("mirror-notice")).toBeInTheDocument();
   });
+});
+
+it("an indexed old gift appears without scanning empty block pages", async () => {
+  const user = userEvent.setup();
+  inboxLogs.push({ giftId: 1n, sender: recipient, stock: apple, amountRaw: 900_000n, unlockAt: 1n });
+  giftReads.set("1", { status: 1, unlockAt: 1n });
+  publicClient.current = makeClient({
+    getBlock: vi.fn().mockResolvedValue({ number: 128000n, timestamp: nowSeconds }),
+    getContractEvents: vi.fn().mockResolvedValue([]),
+  });
+  mirror.query.data = {
+    page: [
+      {
+        giftIdDecimal: "1",
+        vaultAddressLower: vault.toLowerCase(),
+        recipientLower: account.toLowerCase(),
+        senderLower: recipient.toLowerCase(),
+        stockLower: apple.toLowerCase(),
+        amountRawDecimal: "900000",
+        state: "active",
+        unlockAt: 1,
+        createdBlock: 1001,
+      },
+    ],
+  };
+  await connect(testConfig, { connector: testConfig.connectors[0] });
+  render(<Harness />);
+  await user.click(screen.getByRole("tab", { name: "Claim" }));
+  await waitFor(() => expect(screen.queryAllByRole("checkbox")).toHaveLength(1));
+});
+it("a submitted gift no longer blocks a disconnected wallet", async () => {
+  window.localStorage.setItem(
+    pendingPlantStorageKey(8453, vault, account),
+    JSON.stringify({
+      version: 1,
+      kind: "gift",
+      chainId: 8453,
+      hash: giftHash,
+      vault,
+      account,
+      recipient,
+      stock: apple,
+      amountRaw: "250000",
+      unlockAt: "2000000000",
+      noteHash: zeroNoteHash,
+      amountInput: "0.25",
+      transferableAmount: "0.25",
+      symbol: "AAPLc",
+      submittedAt: 1,
+    }),
+  );
+  await connect(testConfig, { connector: testConfig.connectors[0] });
+  render(<Harness />);
+  await screen.findByRole("region", { name: "Submitted gift recovery" });
+  await disconnect(testConfig);
+  await waitFor(() =>
+    expect(screen.queryByRole("region", { name: "Submitted gift recovery" })).not.toBeInTheDocument(),
+  );
+});
+it("note remains recoverable after reload before indexing", async () => {
+  const user = userEvent.setup();
+  const note = "Reload must preserve this note";
+  writeMutateAsync.mockResolvedValue(giftHash);
+  publicClient.current = makeClient({
+    waitForTransactionReceipt: vi.fn().mockResolvedValue({
+      status: "success",
+      logs: [
+        giftCreatedLog({
+          giftId: 7n,
+          sender: account,
+          recipient,
+          stock: apple,
+          amountRaw: 250000n,
+          unlockAt: draftUnlockAt,
+          noteHash: hashGiftNote(note),
+        }),
+      ],
+    }),
+  });
+  await connect(testConfig, { connector: testConfig.connectors[0] });
+  const rendered = render(<Harness />);
+  await fillDraft(user);
+  await user.type(screen.getByLabelText(/Gift note/), note);
+  await user.click(screen.getByRole("button", { name: "Review gift" }));
+  await user.click(await screen.findByRole("button", { name: "Confirm and plant" }));
+  await screen.findByText(/Saving the note once the gift appears in history/);
+  rendered.unmount();
+  mirror.query.data = { gift: { giftIdDecimal: "7" }, note: null };
+  render(<Harness />);
+  await waitFor(() => expect(mirror.attachNote).toHaveBeenCalled());
 });

@@ -3,15 +3,15 @@
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  useConnect,
   useConnection,
-  useConnectors,
+  useConfig,
   useDisconnect,
   usePublicClient,
   useSwitchChain,
   useWriteContract,
 } from "wagmi";
-import { formatUnits, isAddress } from "viem";
+import { getConnection } from "wagmi/actions";
+import { formatUnits, isAddress, getAddress } from "viem";
 import type { Address, Hash } from "viem";
 import { mainnet } from "viem/chains";
 import { ClaimFace } from "@/components/claim-inbox";
@@ -54,6 +54,7 @@ import {
   toUnlockAt,
 } from "@/lib/gifts";
 import { readReceiptWithFallback, secondaryPublicClient } from "@/lib/web3/secondary";
+import { transactionDataSuffix } from "@/lib/web3/attribution";
 import { stocks } from "@/lib/stocks";
 import type { StockSymbol } from "@/lib/stocks";
 
@@ -90,7 +91,13 @@ const plantPhaseLabels: Record<PlantPhase, string> = {
 function readPendingGift(key: string | null) {
   if (!key || typeof window === "undefined") return null;
   try {
-    return decodePendingGift(window.localStorage.getItem(key) ?? "");
+    const pending = decodePendingGift(window.localStorage.getItem(key) ?? "");
+    if (pending?.kind === "gift" && pending.note && Date.now() / 1_000 - pending.submittedAt > 86_400) {
+      const expired = { ...pending, note: undefined };
+      writePendingGift(key, expired);
+      return expired;
+    }
+    return pending;
   } catch {
     return null;
   }
@@ -196,6 +203,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
   const [phase, setPhase] = useState<PlantPhase | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [intent, setIntent] = useState<PreparedPlantIntent | null>(null);
+  const reviewRef = useRef<HTMLElement>(null);
   const [contractAcknowledged, setContractAcknowledged] = useState(false);
   const [pendingGift, setPendingGift] = useState<PendingPlantSubmission | null>(null);
   const reviewGeneration = useRef(0);
@@ -213,10 +221,9 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
   const [minGiftAmountLabel, setMinGiftAmountLabel] = useState<string | null>(null);
 
   const connection = useConnection();
-  const connectors = useConnectors();
-  const connect = useConnect();
   const switchChain = useSwitchChain();
   const write = useWriteContract();
+  const config = useConfig();
   const client = usePublicClient({ chainId: deployment.chainId });
   const ensClient = usePublicClient({ chainId: mainnet.id });
   const reduceMotion = useReducedMotion();
@@ -252,10 +259,37 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
     isGiftNoteValid(note);
 
   useEffect(() => {
+    if (!intent) return;
+    reviewRef.current?.focus({ preventScroll: true });
+    reviewRef.current?.scrollIntoView?.({ block: "nearest", behavior: "instant" });
+  }, [intent]);
+
+  useEffect(() => {
     let current = true;
     queueMicrotask(() => {
       const persisted = readPendingGift(storageKey);
-      if (current && persisted) setPendingGift(persisted);
+      if (!current) return;
+      if (persisted?.kind === "gift" && persisted.giftId !== undefined) {
+        const noteText =
+          Date.now() / 1_000 - persisted.submittedAt <= 86_400
+            ? persisted.note && hashGiftNote(persisted.note) === persisted.noteHash
+              ? persisted.note
+              : ""
+            : "";
+        setSuccess({
+          hash: persisted.hash,
+          giftId: persisted.giftId,
+          recipient: persisted.recipient,
+          amount: persisted.transferableAmount,
+          symbol: persisted.symbol,
+          note: noteText,
+        });
+        setPhase("success");
+        setPendingGift(null);
+        if (!noteText) writePendingGift(storageKey, null);
+      } else {
+        setPendingGift(persisted);
+      }
     });
     return () => {
       current = false;
@@ -315,11 +349,14 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           note: noteText,
         });
         setNoteAttachment("attached");
+        const persisted = readPendingGift(storageKey);
+        if (persisted?.kind === "gift" && persisted.giftId === giftId && persisted.note === noteText)
+          writePendingGift(storageKey, null);
       } catch {
         setNoteAttachment("failed");
       }
     },
-    [attachNote, deployment.chainId, deployment.vaultAddress, indexedNoteGift.connected],
+    [attachNote, deployment.chainId, deployment.vaultAddress, indexedNoteGift.connected, storageKey],
   );
 
   useEffect(() => {
@@ -342,6 +379,15 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
     const vaultAddress = deployment.vaultAddress;
     const account = connection.address;
     if (!account || !client || !ensClient || !vaultAddress) return null;
+    const assertAccount = () => {
+      const current = getConnection(config);
+      if (
+        current.address?.toLowerCase() !== account.toLowerCase() ||
+        current.chainId !== deployment.chainId
+      ) {
+        throw new GiftFlowError("review_changed");
+      }
+    };
     return {
       resolveRecipient: (input) => resolveRecipient(input, ensClient),
       getBlockSnapshot: async () => {
@@ -425,7 +471,10 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           functionName: "approve",
           args: [vault, amountRaw],
         });
+        assertAccount();
         return write.mutateAsync({
+          dataSuffix: transactionDataSuffix,
+          account,
           address: stock,
           abi: ib20Abi,
           functionName: "approve",
@@ -441,7 +490,10 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           functionName: "createGift",
           args: [stock, recipient, amountRaw, giftUnlockAt, noteHash],
         });
+        assertAccount();
         return write.mutateAsync({
+          dataSuffix: transactionDataSuffix,
+          account,
           address: vaultAddress,
           abi: sowmorrowVaultAbi,
           functionName: "createGift",
@@ -544,6 +596,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           amountRaw: reviewed.amountRaw,
           unlockAt: reviewed.unlockAt,
           noteHash: reviewed.noteHash,
+          note,
           amountInput: reviewed.amountInput,
           transferableAmount: formatUnits(reviewed.transferableAmountScaled, reviewed.decimals),
           symbol,
@@ -552,7 +605,11 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
         setPendingGift(submittedGift);
         writePendingGift(storageKey, submittedGift);
       });
-      writePendingGift(storageKey, null);
+      const confirmed = readPendingGift(storageKey);
+      writePendingGift(
+        storageKey,
+        confirmed?.kind === "gift" && confirmed.note ? { ...confirmed, giftId: result.giftId } : null,
+      );
       setPendingGift(null);
       setIntent(null);
       setSuccess({
@@ -616,7 +673,13 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
         unlockAt: pendingGift.unlockAt,
         noteHash: pendingGift.noteHash,
       });
-      writePendingGift(storageKey, null);
+      const recoveredNote =
+        Date.now() / 1_000 - pendingGift.submittedAt <= 86_400
+          ? pendingGift.note && hashGiftNote(pendingGift.note) === pendingGift.noteHash
+            ? pendingGift.note
+            : ""
+          : "";
+      writePendingGift(storageKey, recoveredNote ? { ...pendingGift, giftId: proof.giftId } : null);
       setPendingGift(null);
       setPhase("success");
       setSuccess({
@@ -625,7 +688,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
         recipient: pendingGift.recipient,
         amount: pendingGift.transferableAmount,
         symbol: pendingGift.symbol,
-        note: "",
+        note: recoveredNote,
       });
       onPlant();
     } catch (caught) {
@@ -683,8 +746,9 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           </p>
           {success.note.length > 0 && (
             <p className="mt-3 rounded-xl bg-sun/18 px-3 py-2 text-[12px] leading-relaxed text-ink-soft">
-              Only the note fingerprint is onchain. The note text is stored off-chain for the recipient. Do
-              not include secrets.
+              Public note: anyone can read this text. An unsaved copy stays in this browser until saved or
+              discarded. Recovery expires after 24 hours; expired text is removed when you return. Do not
+              include private information.
             </p>
           )}
           {success.note.length > 0 && noteAttachment === "idle" && (
@@ -699,7 +763,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           )}
           {success.note.length > 0 && noteAttachment === "attached" && (
             <p role="status" className="mt-2 text-[11px] font-extrabold text-meadow-deep">
-              The note is saved for the recipient to read.
+              The public note is saved.
             </p>
           )}
           {success.note.length > 0 && noteAttachment === "failed" && (
@@ -726,10 +790,23 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
               setDate("");
               setNote("");
             }}
+            disabled={success.note.length > 0 && noteAttachment !== "attached"}
             className="primary-button"
           >
             Plant another
           </button>
+          {success.note.length > 0 && noteAttachment !== "attached" && (
+            <button
+              type="button"
+              className="text-[12px] underline"
+              onClick={() => {
+                writePendingGift(storageKey, null);
+                setSuccess({ ...success, note: "" });
+              }}
+            >
+              Discard unsaved note
+            </button>
+          )}
           {detailLink && (
             <a
               href={detailLink}
@@ -755,9 +832,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
 
   const primaryAction = () => {
     if (!connection.isConnected) {
-      const connector = connectors[0];
-      if (connector) connect.mutate({ connector });
-      else setError("No compatible browser wallet was found.");
+      document.querySelector<HTMLButtonElement>('[data-testid="connector-picker"] button')?.focus();
       return;
     }
     if (connection.chainId !== deployment.chainId) {
@@ -784,8 +859,8 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
   const reviewedAmount = intent ? formatUnits(intent.transferableAmountScaled, intent.decimals) : null;
   const reviewedRecipient = intent
     ? isAddress(intent.recipientInput.trim())
-      ? shortAddress(intent.recipient)
-      : `${intent.recipientInput} · ${shortAddress(intent.recipient)}`
+      ? getAddress(intent.recipient)
+      : `${intent.recipientInput} · ${getAddress(intent.recipient)}`
     : null;
   const selectedStock = stocks.find((stock) => stock.symbol === symbol) ?? stocks[0];
   const pendingExplorer = pendingGift ? transactionLink(deployment, pendingGift.hash) : null;
@@ -898,7 +973,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
             </span>
             <textarea
               className="field min-h-12 resize-none"
-              placeholder="A note for the recipient — never include secrets"
+              placeholder="A public note — never include private information"
               value={note}
               onChange={(event) => {
                 invalidateReview();
@@ -909,6 +984,8 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           </motion.label>
           {intent && reviewedUnlock && reviewedAmount && (
             <motion.section
+              ref={reviewRef}
+              tabIndex={-1}
               initial={reduceMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               aria-label="Gift review"
@@ -928,7 +1005,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
               <dl className="mt-2 grid gap-1.5">
                 <div>
                   <dt className="font-extrabold text-ink">Recipient</dt>
-                  <dd>{reviewedRecipient}</dd>
+                  <dd className="break-all font-mono">{reviewedRecipient}</dd>
                 </div>
                 <div>
                   <dt className="font-extrabold text-ink">Stock and amount</dt>
@@ -946,15 +1023,16 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
                     <dt className="font-extrabold text-ink">Note</dt>
                     <dd className="whitespace-pre-wrap break-words">{note}</dd>
                     <dd>
-                      Only its fingerprint goes onchain. The note text is stored off-chain for the recipient.
-                      Do not include secrets.
+                      Public note: anyone can read this text. An unsaved copy stays in this browser until
+                      saved or discarded. Recovery expires after 24 hours; expired text is removed when you
+                      return. Do not include private information.
                     </dd>
                   </div>
                 )}
               </dl>
               {intent.recipientIsContract && (
                 <div className="mt-2 rounded-xl border border-sun-deep/40 bg-sun/20 p-2.5 text-ink">
-                  <p className="font-extrabold">This recipient is a contract, not a wallet.</p>
+                  <p className="font-extrabold">This address uses a smart contract.</p>
                   <p className="mt-1 font-bold">
                     A contract can only take this gift if it is able to call <code>claim</code> on the vault
                     itself. Exchange deposit addresses and most contracts cannot. Nobody, including Sowmorrow,
@@ -972,8 +1050,9 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
                 </div>
               )}
               <p className="mt-2 font-extrabold text-[#8b4b22]">
-                This gift cannot be cancelled, reassigned, or recovered by Sowmorrow. Token eligibility and
-                issuer policies still apply. Your wallet will estimate gas before signing.
+                Use a wallet the recipient controls and can claim from, rather than an exchange deposit
+                address. This gift cannot be cancelled, reassigned, or recovered by Sowmorrow. Token
+                eligibility and issuer policies still apply. Your wallet will estimate gas before signing.
               </p>
             </motion.section>
           )}
@@ -1078,6 +1157,8 @@ function AnimatedFace({
 }) {
   const reduceMotion = useReducedMotion();
   const isPresent = useIsPresent();
+  const connection = useConnection();
+  const identity = `${deployment.chainId}:${deployment.vaultAddress}:${connection.chainId}:${connection.address}`;
   return (
     <motion.div
       aria-hidden={!isPresent}
@@ -1089,9 +1170,15 @@ function AnimatedFace({
       className="col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col"
     >
       {face === "plant" ? (
-        <PlantFace ref={recipientRef} deployment={deployment} entrance={entrance} onPlant={onPlant} />
+        <PlantFace
+          key={identity}
+          ref={recipientRef}
+          deployment={deployment}
+          entrance={entrance}
+          onPlant={onPlant}
+        />
       ) : (
-        <ClaimFace deployment={deployment} entrance={entrance} onClaim={onClaim} />
+        <ClaimFace key={identity} deployment={deployment} entrance={entrance} onClaim={onClaim} />
       )}
     </motion.div>
   );
@@ -1113,6 +1200,11 @@ export const GiftWidget = forwardRef<HTMLInputElement, Props>(function GiftWidge
         <div className="flex flex-col items-start gap-1">
           <NetworkBadge deployment={deployment} />
           <WalletLine />
+          {deployment.chainId === 84532 && (
+            <a href="/testnet" className="text-[10px] font-bold text-sky-deep underline">
+              Valueless test assets · get test funds
+            </a>
+          )}
         </div>
         <FaceTabs face={face} onFaceChange={changeFace} />
       </div>

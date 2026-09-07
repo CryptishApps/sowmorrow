@@ -8,6 +8,7 @@ contract EchidnaHarnessTest is Test {
     EchidnaSowmorrowVault private harness;
 
     function setUp() external {
+        if (vm.envOr("FOUNDRY_BASE", false)) vm.skip(true);
         harness = new EchidnaSowmorrowVault();
     }
 

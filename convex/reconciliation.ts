@@ -30,7 +30,6 @@ const recordMonitorSignalReference = makeFunctionReference<"mutation">("observab
 
 const MAX_RANGE_BLOCKS = 1_999n;
 const MAX_TIP_EVENTS = 500;
-const MAX_ORPHAN_BATCHES = 10;
 const MAX_ORPHAN_BATCH = 500;
 
 type DeliveryFailureCode =
@@ -358,30 +357,28 @@ async function orphanEventsAbove(
   chainId: number,
   vaultAddressLower: string,
   aboveBlock: number,
+  requireHalted = false,
 ) {
-  let orphaned = 0;
-  for (let batch = 0; batch < MAX_ORPHAN_BATCHES; batch += 1) {
-    const events = (await ctx.runQuery(listEventsAboveBlockReference, {
+  const events = (await ctx.runQuery(listEventsAboveBlockReference, {
+    chainId,
+    vaultAddressLower,
+    aboveBlock,
+    limit: MAX_ORPHAN_BATCH,
+  })) as TipEvent[];
+  for (const event of events) {
+    const result = (await ctx.runMutation(setEventCanonicalityReference, {
+      ...(requireHalted ? { requireHalted: true } : {}),
       chainId,
       vaultAddressLower,
-      aboveBlock,
-      limit: MAX_ORPHAN_BATCH,
-    })) as TipEvent[];
-    if (events.length === 0) return orphaned;
-    for (const event of events) {
-      await ctx.runMutation(setEventCanonicalityReference, {
-        chainId,
-        vaultAddressLower,
-        transactionHashLower: event.transactionHashLower,
-        logIndex: event.logIndex,
-        blockHashLower: event.blockHashLower,
-        canonicality: "orphaned",
-        observedAt: nowSeconds(),
-      });
-      orphaned += 1;
-    }
+      transactionHashLower: event.transactionHashLower,
+      logIndex: event.logIndex,
+      blockHashLower: event.blockHashLower,
+      canonicality: "orphaned",
+      observedAt: nowSeconds(),
+    })) as { operation: string };
+    if (result.operation === "recovery_finished") return { orphaned: 0, complete: false };
   }
-  return orphaned;
+  return { orphaned: events.length, complete: events.length < MAX_ORPHAN_BATCH };
 }
 
 type RunRecord = {
@@ -505,19 +502,6 @@ export const reconcileConfiguredVault = internalAction({
       }
     }
 
-    let tipResult: { promoted: number; orphaned: number };
-    try {
-      tipResult = await promoteTipEvents(ctx, deployment, rpc, safeHead);
-    } catch {
-      await recordRun(ctx, deployment, {
-        startedAt,
-        outcome: "failed",
-        errorCode: "projection_failure",
-        safeHeadBlock,
-      });
-      return { operation: "tip_promotion_failure" as const };
-    }
-
     let cursor = (await ctx.runQuery(getCursorReference, {
       pipeline: "vault-events",
       chainId: deployment.chainId,
@@ -535,6 +519,19 @@ export const reconcileConfiguredVault = internalAction({
     if (cursor.state !== "active") {
       await recordRun(ctx, deployment, { startedAt, outcome: "halted", safeHeadBlock });
       return { operation: "halted" as const };
+    }
+
+    let tipResult: { promoted: number; orphaned: number };
+    try {
+      tipResult = await promoteTipEvents(ctx, deployment, rpc, safeHead);
+    } catch {
+      await recordRun(ctx, deployment, {
+        startedAt,
+        outcome: "failed",
+        errorCode: "projection_failure",
+        safeHeadBlock,
+      });
+      return { operation: "tip_promotion_failure" as const };
     }
 
     if (cursor.lastCommittedBlock !== undefined && cursor.lastCommittedBlockHashLower !== undefined) {
@@ -585,6 +582,8 @@ export const reconcileConfiguredVault = internalAction({
           vaultAddressLower,
           ancestor.blockNumber,
         );
+        if (!orphanedEvents.complete)
+          return { operation: "cleanup_pending" as const, orphanedEvents: orphanedEvents.orphaned };
         await ctx.runMutation(rewindCursorReference, {
           pipeline: "vault-events",
           chainId: deployment.chainId,
@@ -602,7 +601,7 @@ export const reconcileConfiguredVault = internalAction({
         return {
           operation: "rewound" as const,
           ancestorBlock: ancestor.blockNumber,
-          orphanedEvents,
+          orphanedEvents: orphanedEvents.orphaned,
         };
       }
     }
@@ -827,6 +826,42 @@ export const repairHaltedCursor = internalAction({
       return { operation: "reset_hash_mismatch" as const };
     }
 
+    const cursor = (await ctx.runQuery(getCursorReference, {
+      pipeline: "vault-events",
+      chainId: deployment.chainId,
+      contractAddressLower: deployment.vaultAddressLower,
+    })) as Cursor | null;
+    if (!cursor) return { operation: "missing" as const };
+    if (cursor.state !== "halted") return { operation: "not_halted" as const };
+    const deploymentBoundary = resetToBlock === deployment.deploymentBlock - 1;
+    if (
+      !deploymentBoundary &&
+      !cursor.checkpoints.some(
+        (checkpoint) =>
+          checkpoint.blockNumber === resetToBlock && checkpoint.blockHashLower === resetToBlockHashLower,
+      )
+    ) {
+      return { operation: "unknown_checkpoint" as const };
+    }
+    const begin = (await ctx.runMutation(makeFunctionReference<"mutation">("indexer:beginHaltedRepair"), {
+      pipeline: "vault-events",
+      chainId: deployment.chainId,
+      contractAddressLower: deployment.vaultAddressLower,
+      resetToBlock,
+    })) as { operation: "ready" | "missing" | "not_halted" | "repair_boundary_conflict" };
+    if (begin.operation !== "ready") return begin;
+    const orphanedEvents = await orphanEventsAbove(
+      ctx,
+      deployment.chainId,
+      deployment.vaultAddressLower,
+      resetToBlock,
+      true,
+    );
+    if (!orphanedEvents.complete)
+      return { operation: "cleanup_pending" as const, orphanedEvents: orphanedEvents.orphaned };
+    const confirmedBlock = await deployment.primary.getBlock(BigInt(resetToBlock));
+    if (confirmedBlock?.hashLower !== resetToBlockHashLower)
+      return { operation: "reset_hash_mismatch" as const };
     const result = (await ctx.runMutation(makeFunctionReference<"mutation">("indexer:resumeHaltedCursor"), {
       pipeline: "vault-events",
       chainId: deployment.chainId,
@@ -835,15 +870,11 @@ export const repairHaltedCursor = internalAction({
       resetToBlockHashLower,
       operator,
       now: nowSeconds(),
-    })) as { operation: "resumed" | "missing" | "not_halted" };
+    })) as {
+      operation: "resumed" | "missing" | "not_halted" | "repair_boundary_conflict" | "cleanup_pending";
+    };
     if (result.operation !== "resumed") return { operation: result.operation };
 
-    const orphanedEvents = await orphanEventsAbove(
-      ctx,
-      deployment.chainId,
-      deployment.vaultAddressLower,
-      resetToBlock,
-    );
     await ctx.runMutation(recordSyncRunReference, {
       pipeline: "operator-repair",
       chainId: deployment.chainId,
@@ -854,6 +885,6 @@ export const repairHaltedCursor = internalAction({
       outcome: "completed",
       operator,
     });
-    return { operation: "resumed" as const, orphanedEvents };
+    return { operation: "resumed" as const, orphanedEvents: orphanedEvents.orphaned };
   },
 });
