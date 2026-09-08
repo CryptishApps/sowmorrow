@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
+import Image from "next/image";
 import type { Address, Hash } from "viem";
 import { useConnect, useConnection, useConnectors } from "wagmi";
 import { mapFlowError } from "@/lib/contracts/errors";
@@ -53,11 +54,23 @@ export function ProgressNotice({ label }: { label: string }) {
 }
 
 export function StockDot({ symbol }: { symbol: string }) {
-  const stock = stocks.find((candidate) => candidate.symbol === symbol) ?? stocks[0];
+  const stock = stocks.find((candidate) => candidate.symbol === symbol);
+  if (stock) {
+    return (
+      <Image
+        src={`/stocks/${stock.symbol}.png`}
+        alt=""
+        width={32}
+        height={32}
+        unoptimized
+        draggable={false}
+        className="size-8 shrink-0 rounded-full bg-white object-contain shadow-sm"
+      />
+    );
+  }
   return (
     <span
-      className="grid size-8 shrink-0 place-items-center rounded-full text-[11px] font-black text-white shadow-sm"
-      style={{ background: `linear-gradient(135deg, hsl(${stock.hue} 72% 58%), hsl(${stock.hue} 72% 36%))` }}
+      className="grid size-8 shrink-0 place-items-center rounded-full bg-ink-soft text-[11px] font-black text-white shadow-sm"
       aria-hidden="true"
     >
       {symbol[0]}
