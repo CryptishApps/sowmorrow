@@ -423,12 +423,33 @@ describe("Plant state machine", () => {
 
     await user.click(screen.getByRole("button", { name: "Confirm and plant" }));
 
+    const walletButton = await screen.findByRole("button", { name: "Plant gift in wallet" });
+    expect(writeMutateAsync).not.toHaveBeenCalled();
+    await user.click(walletButton);
     expect(await screen.findByText("It’s in the ground.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open the gift page" })).toHaveAttribute(
       "href",
       `/gift/8453/${vault}/7`,
     );
     expect(window.localStorage.getItem(pendingPlantStorageKey(8453, vault, account))).toBeNull();
+  });
+
+  it("requires a new review when a prepared wallet action has expired", async () => {
+    const user = userEvent.setup();
+    await connect(testConfig, { connector: testConfig.connectors[0] });
+    render(<Harness />);
+    await fillDraft(user);
+    await user.click(screen.getByRole("button", { name: "Review gift" }));
+    await user.click(await screen.findByRole("button", { name: "Confirm and plant" }));
+    const button = await screen.findByRole("button", { name: "Plant gift in wallet" });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 61_000);
+    try {
+      await user.click(button);
+      expect(await screen.findByRole("button", { name: "Review gift" })).toBeEnabled();
+      expect(writeMutateAsync).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("waits for the indexed gift before attaching its note", async () => {
@@ -459,6 +480,9 @@ describe("Plant state machine", () => {
     await user.click(screen.getByRole("button", { name: "Review gift" }));
     await user.click(await screen.findByRole("button", { name: "Confirm and plant" }));
 
+    const walletButton = await screen.findByRole("button", { name: "Plant gift in wallet" });
+    expect(writeMutateAsync).not.toHaveBeenCalled();
+    await user.click(walletButton);
     expect(await screen.findByText("It’s in the ground.")).toBeInTheDocument();
     expect(screen.getByText(/Saving the note once the gift appears in history/)).toBeInTheDocument();
     expect(mirror.attachNote).not.toHaveBeenCalled();
@@ -801,6 +825,7 @@ it("note remains recoverable after reload before indexing", async () => {
   await user.type(screen.getByLabelText(/Gift note/), note);
   await user.click(screen.getByRole("button", { name: "Review gift" }));
   await user.click(await screen.findByRole("button", { name: "Confirm and plant" }));
+  await user.click(await screen.findByRole("button", { name: "Plant gift in wallet" }));
   await screen.findByText(/Saving the note once the gift appears in history/);
   rendered.unmount();
   mirror.query.data = { gift: { giftIdDecimal: "7" }, note: null };

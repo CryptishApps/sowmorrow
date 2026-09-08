@@ -375,6 +375,34 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
     queueMicrotask(() => void saveNote(giftId, noteText));
   }, [indexedNoteGift.data, noteAttachment, saveNote, success]);
 
+  const [walletActionKind, setWalletActionKind] = useState<"approval" | "gift" | null>(null);
+  const walletAction = useRef<{
+    submit: () => Promise<Hash>;
+    resolve: (hash: Hash) => void;
+    reject: (error: unknown) => void;
+    expiresAt: number;
+  } | null>(null);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      walletAction.current?.reject(new GiftFlowError("review_changed"));
+      walletAction.current = null;
+    };
+  }, []);
+
+  const requestWalletSubmission = (kind: "approval" | "gift", submit: () => Promise<Hash>) =>
+    new Promise<Hash>((resolve, reject) => {
+      if (!mounted.current || walletAction.current) {
+        reject(new GiftFlowError("review_changed"));
+        return;
+      }
+      walletAction.current = { submit, resolve, reject, expiresAt: Date.now() + 60_000 };
+      setWalletActionKind(kind);
+    });
+
   const makeGateway = (): PlantGateway | null => {
     const vaultAddress = deployment.vaultAddress;
     const account = connection.address;
@@ -475,15 +503,17 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           functionName: "approve",
           args: [vault, amountRaw],
         });
-        assertAccount();
-        return write.mutateAsync({
-          dataSuffix: transactionDataSuffix,
-          account,
-          address: stock,
-          abi: ib20Abi,
-          functionName: "approve",
-          args: [vault, amountRaw],
-          chainId: deployment.chainId,
+        return requestWalletSubmission("approval", () => {
+          assertAccount();
+          return write.mutateAsync({
+            dataSuffix: transactionDataSuffix,
+            account,
+            address: stock,
+            abi: ib20Abi,
+            functionName: "approve",
+            args: [vault, amountRaw],
+            chainId: deployment.chainId,
+          });
         });
       },
       createGift: async (stock, recipient, amountRaw, giftUnlockAt, noteHash) => {
@@ -494,15 +524,17 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           functionName: "createGift",
           args: [stock, recipient, amountRaw, giftUnlockAt, noteHash],
         });
-        assertAccount();
-        return write.mutateAsync({
-          dataSuffix: transactionDataSuffix,
-          account,
-          address: vaultAddress,
-          abi: sowmorrowVaultAbi,
-          functionName: "createGift",
-          args: [stock, recipient, amountRaw, giftUnlockAt, noteHash],
-          chainId: deployment.chainId,
+        return requestWalletSubmission("gift", () => {
+          assertAccount();
+          return write.mutateAsync({
+            dataSuffix: transactionDataSuffix,
+            account,
+            address: vaultAddress,
+            abi: sowmorrowVaultAbi,
+            functionName: "createGift",
+            args: [stock, recipient, amountRaw, giftUnlockAt, noteHash],
+            chainId: deployment.chainId,
+          });
         });
       },
       waitForApprovalReceipt: async (hash) => {
@@ -835,6 +867,19 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
   }
 
   const primaryAction = () => {
+    const action = walletAction.current;
+    if (action) {
+      walletAction.current = null;
+      setWalletActionKind(null);
+      try {
+        if (Date.now() > action.expiresAt) throw new GiftFlowError("review_changed");
+        void action.submit().then(action.resolve, action.reject);
+      } catch (caught) {
+        action.reject(caught);
+      }
+      return;
+    }
+    if (busy) return;
     if (!connection.isConnected) {
       document.querySelector<HTMLButtonElement>('[data-testid="connector-picker"] button')?.focus();
       return;
@@ -1125,8 +1170,8 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
           <button
             type="submit"
             disabled={
-              busy ||
-              pendingGift !== null ||
+              (busy && !walletActionKind) ||
+              (pendingGift !== null && !walletActionKind) ||
               !deployment.writesEnabled ||
               contractWarningUnmet ||
               (connection.isConnected &&
@@ -1136,8 +1181,14 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
             }
             className="primary-button flex items-center justify-center gap-2"
           >
-            {busy && <Spinner />}
-            {busy && phase ? plantPhaseLabels[phase] : buttonLabel}
+            {busy && !walletActionKind && <Spinner />}
+            {walletActionKind
+              ? walletActionKind === "approval"
+                ? "Approve stock in wallet"
+                : "Plant gift in wallet"
+              : busy && phase
+                ? plantPhaseLabels[phase]
+                : buttonLabel}
           </button>
         </motion.div>
       </motion.form>

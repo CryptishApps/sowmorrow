@@ -284,6 +284,12 @@ for (const wallet of ["Coinbase Wallet", "MetaMask"]) {
     if (wallet === "Coinbase Wallet")
       await page.screenshot({ path: ".cache/launch-review/enabled-review.png", fullPage: true });
     await page.getByRole("button", { name: "Confirm and plant" }).click();
+    await expect(page.getByRole("button", { name: "Approve stock in wallet" })).toBeEnabled();
+    expect(writes).toEqual([]);
+    await page.getByRole("button", { name: "Approve stock in wallet" }).click();
+    await expect(page.getByRole("button", { name: "Plant gift in wallet" })).toBeEnabled();
+    expect(writes).toEqual(["approve"]);
+    await page.getByRole("button", { name: "Plant gift in wallet" }).click();
     await expect(page.getByText("It’s in the ground.")).toBeVisible();
     expect(writes).toEqual(["approve", "createGift"]);
     now = unlockAt + 1n;
