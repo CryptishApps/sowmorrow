@@ -13,7 +13,7 @@
     "address": "0x00077DF28c24A199d33B30560Bda394819498a72"
   },
   "startPaused": true,
-  "expectedCreationPaused": true,
+  "expectedCreationPaused": false,
   "catalogAddressSetSha256": "6f9668465af1f0f939d7c9e9c46fc0ad00eecd02782f1983a9f67bce87f7b92f",
   "stocks": [
     {
