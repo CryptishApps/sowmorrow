@@ -13,7 +13,7 @@ import {
 import { getConnection } from "wagmi/actions";
 import { formatUnits, isAddress, getAddress } from "viem";
 import type { Address, Hash } from "viem";
-import { mainnet } from "viem/chains";
+import { identityNetwork } from "@/lib/web3/identity";
 import { ClaimFace } from "@/components/claim-inbox";
 import {
   entranceEase,
@@ -225,7 +225,9 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
   const write = useWriteContract();
   const config = useConfig();
   const client = usePublicClient({ chainId: deployment.chainId });
-  const ensClient = usePublicClient({ chainId: mainnet.id });
+  const identity = identityNetwork(deployment.chainId);
+  const basenameClient = usePublicClient({ chainId: identity.baseChainId });
+  const ensClient = usePublicClient({ chainId: identity.ensChainId });
   const reduceMotion = useReducedMotion();
   const entranceState = useEntranceSettled(reduceMotion);
   const attachNote = useMirrorMutation(mirrorApi.attachNote);
@@ -378,7 +380,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
   const makeGateway = (): PlantGateway | null => {
     const vaultAddress = deployment.vaultAddress;
     const account = connection.address;
-    if (!account || !client || !ensClient || !vaultAddress) return null;
+    if (!account || !client || !ensClient || !basenameClient || !vaultAddress) return null;
     const assertAccount = () => {
       const current = getConnection(config);
       if (
@@ -389,7 +391,11 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
       }
     };
     return {
-      resolveRecipient: (input) => resolveRecipient(input, ensClient),
+      resolveRecipient: (input) =>
+        resolveRecipient(input, ensClient, {
+          chainId: deployment.chainId,
+          readContract: basenameClient.readContract,
+        }),
       getBlockSnapshot: async () => {
         const block = await client.getBlock({ blockTag: "latest" });
         if (block.number === null) throw new Error("Latest Base block has no number");
@@ -887,7 +893,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
             <input
               ref={recipientRef}
               className="field"
-              placeholder="name.base.eth or 0x…"
+              placeholder={identity.placeholder}
               autoComplete="off"
               spellCheck={false}
               value={recipientInput}

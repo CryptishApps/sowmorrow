@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
+import Image from "next/image";
 import type { Variants } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
@@ -107,7 +108,6 @@ export function StockRail({ selected, onSelect, availableSymbols, disabled = fal
       lastTime: event.timeStamp,
       velocity: 0,
     };
-    rail.setPointerCapture(event.pointerId);
   };
 
   const moveDrag = (event: PointerEvent<HTMLDivElement>) => {
@@ -115,7 +115,10 @@ export function StockRail({ selected, onSelect, availableSymbols, disabled = fal
     const drag = dragRef.current;
     if (!rail || !drag || drag.pointerId !== event.pointerId) return;
     const distance = event.clientX - drag.startX;
-    if (!drag.moved && Math.abs(distance) > 4) drag.moved = true;
+    if (!drag.moved && Math.abs(distance) > 4) {
+      drag.moved = true;
+      rail.setPointerCapture(event.pointerId);
+    }
     if (!drag.moved) return;
     event.preventDefault();
 
@@ -203,6 +206,9 @@ export function StockRail({ selected, onSelect, availableSymbols, disabled = fal
         onPointerMove={moveDrag}
         onPointerUp={finishDrag}
         onPointerCancel={cancelDrag}
+        onPointerLeave={(event) => {
+          if (!dragRef.current?.moved) cancelDrag(event);
+        }}
         onClickCapture={suppressDraggedClick}
         className="stock-rail flex w-full min-w-0 gap-2 overflow-x-auto py-0.5"
       >
@@ -226,15 +232,15 @@ export function StockRail({ selected, onSelect, availableSymbols, disabled = fal
                 whileTap={reduceMotion ? undefined : { scale: 0.97 }}
                 className="stock-packet group relative flex min-w-[124px] items-center gap-2 overflow-hidden rounded-[13px] border border-ink/12 bg-[#fffdf8] px-2 py-1.5 text-left transition-colors aria-checked:border-ink aria-checked:bg-ink aria-checked:text-cream disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-3 focus-visible:outline-meadow/50"
               >
-                <span
-                  className="grid size-7 shrink-0 place-items-center rounded-full text-[11px] font-black text-white shadow-sm"
-                  style={{
-                    background: `linear-gradient(135deg, hsl(${stock.hue} 72% 58%), hsl(${stock.hue} 72% 36%))`,
-                  }}
-                  aria-hidden="true"
-                >
-                  {stock.symbol[0]}
-                </span>
+                <Image
+                  src={`/stocks/${stock.symbol}.png`}
+                  alt=""
+                  width={28}
+                  height={28}
+                  unoptimized
+                  draggable={false}
+                  className="size-7 shrink-0 rounded-full bg-white object-contain shadow-sm"
+                />
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-[11.5px] font-extrabold leading-none">{stock.symbol}</span>
                   <span className="mt-1 truncate text-[9.5px] font-bold leading-none text-ink-soft group-aria-checked:text-cream/65">

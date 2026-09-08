@@ -1,7 +1,7 @@
 import { createConfig, fallback, http } from "wagmi";
 import type { Transport } from "wagmi";
 import { coinbaseWallet, injected } from "wagmi/connectors";
-import { base, baseSepolia, foundry, mainnet } from "wagmi/chains";
+import { base, baseSepolia, foundry, mainnet, sepolia } from "wagmi/chains";
 
 const secondaryRpcUrls: Partial<Record<number, string | undefined>> = {
   [base.id]: process.env.NEXT_PUBLIC_BASE_RPC_URL_SECONDARY,
@@ -19,7 +19,7 @@ function transport(chainId: number, primaryUrl: string | undefined): Transport {
 }
 
 export const wagmiConfig = createConfig({
-  chains: [base, baseSepolia, foundry, mainnet],
+  chains: [base, baseSepolia, foundry, mainnet, sepolia],
   multiInjectedProviderDiscovery: false,
   connectors: [
     injected({ target: "metaMask" }),
@@ -34,6 +34,7 @@ export const wagmiConfig = createConfig({
     [baseSepolia.id]: transport(baseSepolia.id, process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL),
     [foundry.id]: http(process.env.NEXT_PUBLIC_ANVIL_RPC_URL ?? "http://127.0.0.1:8545"),
     [mainnet.id]: http(process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL),
+    [sepolia.id]: http(process.env.NEXT_PUBLIC_ETHEREUM_SEPOLIA_RPC_URL),
   },
   ssr: true,
 });

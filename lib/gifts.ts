@@ -1,7 +1,17 @@
-import { getAddress, isAddress, keccak256, parseUnits, toCoinType, zeroHash } from "viem";
+import {
+  getAddress,
+  isAddress,
+  keccak256,
+  parseAbi,
+  parseUnits,
+  toCoinType,
+  zeroAddress,
+  zeroHash,
+} from "viem";
 import { base } from "viem/chains";
-import { normalize } from "viem/ens";
-import type { Address } from "viem";
+import { namehash, normalize } from "viem/ens";
+import type { Address, PublicClient } from "viem";
+import { identityNetwork } from "@/lib/web3/identity";
 
 export const MAX_GIFT_NOTE_BYTES = 280;
 const AMOUNT_PARSE_GUARD_DECIMALS = 256;
@@ -12,6 +22,16 @@ const noteEncoder = new TextEncoder();
 type EnsClient = {
   getEnsAddress: (parameters: { name: string; coinType: bigint }) => Promise<Address | null>;
 };
+
+type BaseIdentityClient = Pick<PublicClient, "readContract"> & {
+  chainId: Parameters<typeof identityNetwork>[0];
+};
+
+const identityAbi = parseAbi([
+  "function resolver(bytes32 node) view returns (address)",
+  "function addr(bytes32 node) view returns (address)",
+  "function addr(bytes32 node, uint256 coinType) view returns (bytes)",
+]);
 
 export function parseGiftAmount(input: string, decimals: number): bigint | null {
   if (
@@ -123,10 +143,42 @@ export function formatUnlockReview(unlockAt: bigint): {
   };
 }
 
-export async function resolveRecipient(input: string, client: EnsClient): Promise<Address | null> {
+export async function resolveRecipient(
+  input: string,
+  client: EnsClient,
+  identity?: BaseIdentityClient,
+): Promise<Address | null> {
   const candidate = input.trim();
   if (isAddress(candidate)) return getAddress(candidate);
   const name = normalize(candidate);
-  const resolved = await client.getEnsAddress({ name, coinType: toCoinType(base.id) });
-  return resolved === null ? null : getAddress(resolved);
+  const network = identityNetwork(identity?.chainId ?? base.id);
+  if (identity) {
+    const node = namehash(name);
+    const resolver = await identity.readContract({
+      address: network.registry,
+      abi: identityAbi,
+      functionName: "resolver",
+      args: [node],
+    });
+    if (resolver !== zeroAddress) {
+      const chainAddress = await identity.readContract({
+        address: resolver,
+        abi: identityAbi,
+        functionName: "addr",
+        args: [node, toCoinType(network.baseChainId)],
+      });
+      const resolved =
+        chainAddress === "0x"
+          ? await identity.readContract({
+              address: resolver,
+              abi: identityAbi,
+              functionName: "addr",
+              args: [node],
+            })
+          : chainAddress;
+      return !isAddress(resolved) || resolved === zeroAddress ? null : getAddress(resolved);
+    }
+  }
+  const resolved = await client.getEnsAddress({ name, coinType: toCoinType(network.baseChainId) });
+  return resolved === null || resolved === zeroAddress ? null : getAddress(resolved);
 }

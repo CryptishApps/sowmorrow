@@ -79,6 +79,15 @@ test("shows all 13 reviewed stocks in one discoverable rail", async ({ page }) =
   await expect(page.getByTestId("stock-fade-right")).toHaveCount(0);
 });
 
+test("selects a stock with a mouse click and updates the amount symbol", async ({ page }) => {
+  await page.goto("/");
+  const amazon = page.getByRole("radio", { name: "Amazon · AMZNc" });
+  await amazon.click();
+  await expect(amazon).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Apple · AAPLc" })).not.toBeChecked();
+  await expect(page.getByRole("textbox", { name: /How much/ }).locator("..")).toContainText("AMZNc");
+});
+
 test("drags the stock rail without changing the selected stock", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/");

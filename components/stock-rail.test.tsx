@@ -133,6 +133,15 @@ describe("StockRail overflow controls", () => {
     fireEvent.pointerMove(rail, { pointerId: 2, clientX: 200 });
     expect(rail.scrollLeft).toBe(300);
   });
+
+  it("abandons a press that leaves the rail before dragging", () => {
+    render(<StockRail selected={stocks[0].symbol} onSelect={vi.fn()} />);
+    const rail = overflowing(screen.getByTestId("stock-rail"));
+    fireEvent.pointerDown(rail, { pointerId: 1, pointerType: "mouse", button: 0, clientX: 400 });
+    fireEvent.pointerLeave(rail, { pointerId: 1 });
+    fireEvent.pointerMove(rail, { pointerId: 1, clientX: 200 });
+    expect(rail.scrollLeft).toBe(300);
+  });
 });
 
 describe("StockRail availability", () => {

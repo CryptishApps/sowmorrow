@@ -6,6 +6,10 @@ Sowmorrow turns Coinbase tokenized stocks on Base into time-locked gifts. A send
 
 The app starts in a safe read-only preview. Wallet writes remain unavailable until the selected chain has a verified vault deployment, and Base mainnet has an additional release gate. A public Base Sepolia test vault is active; Base mainnet remains intentionally pending.
 
+Recipient name resolution follows `NEXT_PUBLIC_SOWMORROW_CHAIN_ID`, independently of the hostname or write gate. Base Mainnet (`8453`), including the read-only mainnet preview, uses the Base Mainnet Basenames registry and Ethereum Mainnet ENS. Base Sepolia (`84532`) and local (`31337`) use the Base Sepolia registry and Ethereum Sepolia ENS; their input suggests `name.basetest.eth`. Local gift contracts remain local, but names resolve against the public testnet. `NEXT_PUBLIC_ETHEREUM_SEPOLIA_RPC_URL` can override the Ethereum Sepolia RPC. Resolver addresses come from each name's registry record, using the [official Basenames registry deployments](https://github.com/base/basenames#contract-addresses).
+
+The stock rail uses the reviewed [Base token catalog](https://docs.base.org/specifications/b20/tokenized-stocks-on-base); selection is limited to the configured deployment's stock addresses. Listing a token does not guarantee a transferable balance or current transfer eligibility. Gift review applies the B20 multiplier conversion, checks the vault's support and pause state, and simulates the transfer before submission. Logos in `public/stocks` are local copies of the images returned by each mainnet token's `contractURI`, with original URLs and content hashes recorded in `data/stock-logo-sources.json`.
+
 ## Features
 
 - A single-screen Plant/Claim experience, responsive gift pages, and accessible keyboard, touch, and drag controls.
