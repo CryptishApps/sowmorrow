@@ -1,0 +1,9 @@
+{
+  "NEXT_PUBLIC_SOWMORROW_CHAIN_ID": "8453",
+  "NEXT_PUBLIC_SOWMORROW_WRITES_ENABLED": "true",
+  "NEXT_PUBLIC_SOWMORROW_MAINNET_RELEASED": "true",
+  "NEXT_PUBLIC_CONVEX_URL": "https://aware-snake-799.convex.cloud",
+  "NEXT_PUBLIC_BASE_RPC_URL": "https://api.developer.coinbase.com/rpc/v1/base/tbDFce7sV29h2Fz6WVlBZcgdCIeOtH8N",
+  "NEXT_PUBLIC_BASE_RPC_URL_SECONDARY": "https://mainnet.base.org",
+  "NEXT_PUBLIC_ETHEREUM_RPC_URL": "https://ethereum-rpc.publicnode.com"
+}
