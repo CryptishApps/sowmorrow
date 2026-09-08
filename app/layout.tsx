@@ -34,6 +34,9 @@ export const metadata: Metadata = {
   title,
   description,
   applicationName: siteName,
+  other: {
+    "base:app_id": "6a9f781917cf39c8cab577e5",
+  },
   alternates: { canonical: "/" },
   openGraph: {
     title,
