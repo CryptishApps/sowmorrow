@@ -1122,7 +1122,6 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
         </div>
 
         <motion.div variants={entranceItem} className="flex shrink-0 flex-col gap-2">
-          <ConnectorPicker enabled={deployment.writesEnabled} />
           <button
             type="submit"
             disabled={
@@ -1161,6 +1160,9 @@ function AnimatedFace({
   const isPresent = useIsPresent();
   const connection = useConnection();
   const identity = `${deployment.chainId}:${deployment.vaultAddress}:${connection.chainId}:${connection.address}`;
+  const switchChain = useSwitchChain();
+  const walletRequired =
+    deployment.writesEnabled && (!connection.isConnected || connection.chainId !== deployment.chainId);
   return (
     <motion.div
       aria-hidden={!isPresent}
@@ -1169,16 +1171,68 @@ function AnimatedFace({
       animate={{ opacity: 1, x: 0 }}
       exit={reduceMotion ? undefined : { opacity: 0, x: face === "claim" ? -14 : 14 }}
       transition={{ duration: reduceMotion ? 0 : 0.2, ease: entranceEase }}
-      className="col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col"
+      className="relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col"
     >
       {face === "plant" ? (
-        <PlantFace
-          key={identity}
-          ref={recipientRef}
-          deployment={deployment}
-          entrance={entrance}
-          onPlant={onPlant}
-        />
+        <>
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            inert={walletRequired ? true : undefined}
+            aria-hidden={walletRequired ? true : undefined}
+          >
+            <PlantFace
+              key={identity}
+              ref={recipientRef}
+              deployment={deployment}
+              entrance={entrance}
+              onPlant={onPlant}
+            />
+          </div>
+          <AnimatePresence
+            onExitComplete={() =>
+              document.getElementById("plant-panel")?.querySelector<HTMLInputElement>("input")?.focus()
+            }
+          >
+            {walletRequired && (
+              <motion.div
+                key="wallet-gate"
+                initial={false}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: reduceMotion ? 0 : 0.35, ease: entranceEase }}
+                className="absolute inset-0 z-20 flex items-center justify-center bg-cream/80 px-6 py-10 backdrop-blur-[3px] sm:px-10"
+              >
+                <div className="flex w-full max-w-[350px] flex-col items-center text-center">
+                  <h2 className="display text-[32px] leading-tight text-ink">
+                    {connection.isConnected ? `Switch to ${deployment.networkName}` : "Connect your wallet"}
+                  </h2>
+                  <p className="mb-6 mt-3 max-w-[270px] text-[13px] leading-relaxed text-ink-soft">
+                    {connection.isConnected
+                      ? "Get your wallet onto the right network to plant your gift."
+                      : "A little something for their future. Start with your wallet."}
+                  </p>
+                  {connection.isConnected ? (
+                    <button
+                      type="button"
+                      className="primary-button w-full"
+                      disabled={switchChain.isPending}
+                      onClick={() => switchChain.mutate({ chainId: deployment.chainId })}
+                    >
+                      Switch to {deployment.networkName}
+                    </button>
+                  ) : (
+                    <ConnectorPicker enabled prominent />
+                  )}
+                  {switchChain.error && (
+                    <p role="alert" className="mt-3 text-[12px] text-poppy">
+                      {friendlyError(switchChain.error)}
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
       ) : (
         <ClaimFace key={identity} deployment={deployment} entrance={entrance} onClaim={onClaim} />
       )}

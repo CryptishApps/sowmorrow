@@ -95,7 +95,7 @@ export function MirrorNotice({ lagBlocks }: { lagBlocks?: number | null }) {
   );
 }
 
-export function ConnectorPicker({ enabled }: { enabled: boolean }) {
+export function ConnectorPicker({ enabled, prominent = false }: { enabled: boolean; prominent?: boolean }) {
   const connection = useConnection();
   const connectors = useConnectors();
   const connect = useConnect();
@@ -105,11 +105,15 @@ export function ConnectorPicker({ enabled }: { enabled: boolean }) {
       role="group"
       aria-label="Choose a wallet"
       data-testid="connector-picker"
-      className="flex flex-wrap items-center gap-2"
+      className={
+        prominent
+          ? "flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap"
+          : "flex flex-wrap items-center gap-2"
+      }
     >
-      <span className="field-label text-[11px]">Wallet</span>
+      {!prominent && <span className="field-label text-[11px]">Wallet</span>}
       {connect.error && (
-        <p role="alert" className="text-[12px] text-poppy">
+        <p role="alert" className="w-full text-[12px] text-poppy">
           {friendlyError(connect.error)}
         </p>
       )}
@@ -119,9 +123,14 @@ export function ConnectorPicker({ enabled }: { enabled: boolean }) {
           type="button"
           onClick={() => connect.mutate({ connector })}
           disabled={connect.isPending}
-          className="chip"
+          className={
+            prominent
+              ? `flex min-h-12 flex-1 items-center justify-center gap-2.5 rounded-2xl border px-6 py-3 text-[14px] font-extrabold shadow-sm transition hover:-translate-y-0.5 focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-meadow/50 disabled:cursor-wait disabled:opacity-60 ${connector.id === "coinbaseWalletSDK" ? "border-[#0000ff] bg-[#0000ff] text-white hover:bg-[#1515df]" : "border-ink/15 bg-white text-ink hover:border-ink/35"}`
+              : "chip"
+          }
         >
-          {connector.name}
+          {connect.isPending && <Spinner />}
+          {connector.id === "coinbaseWalletSDK" ? "Base" : connector.name}
         </button>
       ))}
     </div>

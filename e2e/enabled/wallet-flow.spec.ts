@@ -257,10 +257,20 @@ for (const wallet of ["Coinbase Wallet", "MetaMask"]) {
       });
     });
     await page.emulateMedia({ reducedMotion: "reduce" });
+    if (wallet === "MetaMask") await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Connect your wallet" })).toBeVisible();
+    await page.screenshot({
+      path: `.cache/wallet-deployment/wallet-gate-${wallet === "MetaMask" ? "mobile" : "desktop"}.png`,
+    });
+    await expect(page.getByRole("textbox", { name: "Who is it for" })).toHaveCount(0);
     await expect(page.getByTestId("connector-picker").getByRole("button")).toHaveCount(2);
-    await page.getByRole("button", { name: wallet, exact: true }).click();
+    await page
+      .getByRole("button", { name: wallet === "Coinbase Wallet" ? "Base" : wallet, exact: true })
+      .click();
     await expect(page.getByRole("button", { name: /disconnect/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect your wallet" })).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Who is it for" })).toBeVisible();
     await page.getByLabel("Who is it for").fill(account);
     await page.getByPlaceholder("0.10").fill("0.25");
     const date = new Date();
@@ -278,7 +288,9 @@ for (const wallet of ["Coinbase Wallet", "MetaMask"]) {
     expect(writes).toEqual(["approve", "createGift"]);
     now = unlockAt + 1n;
     await page.getByRole("link", { name: "Open the gift page" }).click();
-    await page.getByRole("button", { name: wallet, exact: true }).click();
+    await page
+      .getByRole("button", { name: wallet === "Coinbase Wallet" ? "Base" : wallet, exact: true })
+      .click();
     await expect(page.getByRole("button", { name: "Claim 1 selected gift" })).toBeEnabled();
     await expect(page.getByRole("checkbox")).toBeVisible();
     if (wallet === "Coinbase Wallet")

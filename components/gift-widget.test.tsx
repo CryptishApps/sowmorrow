@@ -280,6 +280,20 @@ beforeEach(async () => {
 });
 
 describe("Plant state machine", () => {
+  it("requires wallet connection before the plant fields become available", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    expect(screen.getByRole("heading", { name: "Connect your wallet" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Who is it for" })).not.toBeInTheDocument();
+    await user.click(within(screen.getByRole("group", { name: "Choose a wallet" })).getByRole("button"));
+    await waitFor(() =>
+      expect(screen.queryByRole("heading", { name: "Connect your wallet" })).not.toBeInTheDocument(),
+    );
+    await fillDraft(user);
+    expect(screen.getByLabelText("Who is it for")).toHaveValue(recipient);
+    expect(screen.getByRole("button", { name: "Review gift" })).toBeEnabled();
+  });
+
   it("blocks review until the draft is complete, then shows a friendly reviewed gift", async () => {
     const user = userEvent.setup();
     await connect(testConfig, { connector: testConfig.connectors[0] });
