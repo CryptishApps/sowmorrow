@@ -14,6 +14,7 @@ import type { Address, PublicClient } from "viem";
 import { identityNetwork } from "@/lib/web3/identity";
 
 export const MAX_GIFT_NOTE_BYTES = 280;
+export const UNLOCK_SAFETY_MARGIN_SECONDS = 300n;
 const AMOUNT_PARSE_GUARD_DECIMALS = 256;
 const MAX_AMOUNT_INPUT_LENGTH = 256;
 const MAX_UINT64 = (1n << 64n) - 1n;
@@ -71,15 +72,7 @@ export function toUnlockAt(dateInput: string): bigint | null {
   const local = new Date(0);
   local.setFullYear(year, month - 1, day);
   local.setHours(9, 0, 0, 0);
-  if (
-    local.getFullYear() !== year ||
-    local.getMonth() !== month - 1 ||
-    local.getDate() !== day ||
-    local.getHours() !== 9 ||
-    local.getMinutes() !== 0 ||
-    local.getSeconds() !== 0 ||
-    local.getMilliseconds() !== 0
-  ) {
+  if (local.getFullYear() !== year || local.getMonth() !== month - 1 || local.getDate() !== day) {
     return null;
   }
   const milliseconds = local.getTime();
@@ -89,13 +82,12 @@ export function toUnlockAt(dateInput: string): bigint | null {
 }
 
 export function minimumUnlockDate(nowMilliseconds = Date.now()): string {
-  const tomorrow = new Date(nowMilliseconds);
-  tomorrow.setHours(0, 0, 0, 0);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const year = String(tomorrow.getFullYear()).padStart(4, "0");
-  const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
-  const day = String(tomorrow.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const earliest = new Date(nowMilliseconds);
+  earliest.setHours(9, 0, 0, 0);
+  if (earliest.getTime() <= nowMilliseconds + Number(UNLOCK_SAFETY_MARGIN_SECONDS) * 1_000) {
+    earliest.setDate(earliest.getDate() + 1);
+  }
+  return `${String(earliest.getFullYear()).padStart(4, "0")}-${String(earliest.getMonth() + 1).padStart(2, "0")}-${String(earliest.getDate()).padStart(2, "0")}`;
 }
 
 export function daysUntil(dateInput: string, nowMilliseconds = Date.now()): number | null {

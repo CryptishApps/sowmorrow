@@ -43,7 +43,6 @@ import { proveGiftCreated, ReceiptProofError } from "@/lib/contracts/receipts";
 import { mirrorApi, mirrorConfigured } from "@/lib/convex/api";
 import { useMirrorMutation, useMirrorQuery } from "@/lib/convex/provider";
 import {
-  daysUntil,
   formatUnlockReview,
   hashGiftNote,
   isGiftNoteValid,
@@ -247,7 +246,6 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
       : null;
 
   const unlockAt = toUnlockAt(date);
-  const days = daysUntil(date);
   const noteBytes = noteByteLength(note);
   const stockAddress = deployment.stockAddresses[symbol];
   const busy = phase !== null && phase !== "success";
@@ -960,9 +958,7 @@ const PlantFace = forwardRef<HTMLInputElement, FaceProps & Pick<Props, "onPlant"
               {minGiftAmountLabel !== null ? `Minimum ${minGiftAmountLabel} ${symbol}` : " "}
             </p>
             <p className="min-h-4 pl-3.5 font-mono text-[10px] text-ink-soft">
-              {unlockAt !== null && days !== null
-                ? `${days} day${days === 1 ? "" : "s"} away · 09:00 in your current time zone`
-                : "Opens at 09:00 on the day you pick."}
+              Opens at 09:00 in your current time zone.
             </p>
           </motion.div>
 

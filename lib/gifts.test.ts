@@ -28,13 +28,12 @@ describe("gift input boundaries", () => {
     expect(parseGiftAmount("1.2300", 2)).toBe(123n);
   });
 
-  it("creates deterministic UTC unlock timestamps and minimum dates", () => {
+  it("allows today before the local 09:00 cutoff and preserves the signing margin", () => {
     const unlockAt = toUnlockAt("2030-03-12");
     expect(unlockAt).not.toBeNull();
-    const local = new Date(Number(unlockAt) * 1_000);
-    expect([local.getFullYear(), local.getMonth() + 1, local.getDate(), local.getHours()]).toEqual([
-      2030, 3, 12, 9,
-    ]);
+    expect(Number(unlockAt) * 1_000).toBe(new Date(2030, 2, 12, 9).getTime());
+    expect(minimumUnlockDate(new Date(2030, 2, 12, 8, 50).getTime())).toBe("2030-03-12");
+    expect(minimumUnlockDate(new Date(2030, 2, 12, 8, 55).getTime())).toBe("2030-03-13");
     expect(toUnlockAt("not-a-date")).toBeNull();
     expect(toUnlockAt("1960-01-01")).toBeNull();
     expect(toUnlockAt("2030-02-30")).toBeNull();

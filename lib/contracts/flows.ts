@@ -1,6 +1,6 @@
 import { formatUnits, zeroAddress } from "viem";
 import type { Address, Hash, Hex } from "viem";
-import { parseGiftAmount } from "@/lib/gifts";
+import { parseGiftAmount, UNLOCK_SAFETY_MARGIN_SECONDS } from "@/lib/gifts";
 import type { GiftClaimedExpectation, GiftCreatedExpectation } from "./receipts";
 
 export type PlantPhase =
@@ -140,7 +140,7 @@ export type SubmittedPlantTransaction = {
   hash: Hash;
 };
 
-export const UNLOCK_SAFETY_MARGIN_SECONDS = 300n;
+export { UNLOCK_SAFETY_MARGIN_SECONDS } from "@/lib/gifts";
 
 export async function preparePlant(
   gateway: PlantGateway,
