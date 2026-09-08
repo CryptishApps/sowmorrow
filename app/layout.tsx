@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Fraunces, JetBrains_Mono, Nunito } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -53,7 +54,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  await connection();
   return (
     <html lang="en" className={`${fraunces.variable} ${nunito.variable} ${jetbrains.variable} h-full`}>
       <body className="min-h-full">

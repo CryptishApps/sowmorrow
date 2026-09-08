@@ -131,6 +131,38 @@ describe("CDP webhook HTTP route", () => {
     expect(deliveries).toHaveLength(1);
   });
 
+  it.each(["flat", "envelope"])("ignores signed non-gift vault events in the %s payload", async (format) => {
+    const t = convexTest(schema, modules);
+    const payload = JSON.parse(format === "flat" ? flatBody : envelopeBody);
+    if (format === "flat") payload.event_name = "CreationPausedSet";
+    else payload.data.eventName = "CreationPausedSet";
+    const bytes = encoder.encode(JSON.stringify(payload));
+    const headers = {
+      "x-event-id": "evt_http_test",
+      "x-event-type": "onchain.activity.detected",
+    };
+    expect((await post(t, bytes, headers)).status).toBe(401);
+    const response = await post(t, bytes, {
+      ...headers,
+      "x-hook0-signature": await signature(bytes),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("Event ignored");
+    expect(await t.run((ctx) => ctx.db.query("webhookDeliveries").collect())).toHaveLength(0);
+
+    if (format === "flat") payload.contract_address = owner;
+    else payload.data.contractAddress = owner;
+    const wrongVaultBytes = encoder.encode(JSON.stringify(payload));
+    expect(
+      (
+        await post(t, wrongVaultBytes, {
+          ...headers,
+          "x-hook0-signature": await signature(wrongVaultBytes),
+        })
+      ).status,
+    ).toBe(400);
+  });
+
   it("rejects a request that declares no content length", async () => {
     const t = convexTest(schema, modules);
     const bytes = encoder.encode(envelopeBody);

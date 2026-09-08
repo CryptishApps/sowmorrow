@@ -11,7 +11,7 @@ const flatWebhookEventSchema = z
   .object({
     block_number: z.number().int().nonnegative().safe(),
     contract_address: z.string().refine((value) => isAddress(value)),
-    event_name: z.enum(["GiftCreated", "GiftClaimed"]),
+    event_name: z.string().min(1).max(256),
     log_index: z.number().int().nonnegative().safe(),
     network: z.enum(["base-mainnet", "base-sepolia"]),
     transaction_hash: z.string().refine((value) => isHash(value)),
@@ -26,7 +26,7 @@ const envelopedWebhookEventSchema = z
       .object({
         blockNumber: z.number().int().nonnegative().safe(),
         contractAddress: z.string().refine((value) => isAddress(value)),
-        eventName: z.enum(["GiftCreated", "GiftClaimed"]),
+        eventName: z.string().min(1).max(256),
         logIndex: z.number().int().nonnegative().safe(),
         networkId: z.enum(["base-mainnet", "base-sepolia"]),
         transactionHash: z.string().refine((value) => isHash(value)),
@@ -112,6 +112,10 @@ http.route({
     const vaultAddressLower = getAddress(payload.contract_address).toLowerCase();
     if (payload.network !== manifest.network || vaultAddressLower !== manifest.vaultAddress.toLowerCase()) {
       return response(400, "Webhook target does not match this deployment");
+    }
+
+    if (payload.event_name !== "GiftCreated" && payload.event_name !== "GiftClaimed") {
+      return response(200, "Event ignored");
     }
 
     const receipt = await ctx.runMutation(internal.webhooks.recordVerifiedDelivery, {

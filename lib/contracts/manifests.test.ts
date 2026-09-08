@@ -16,6 +16,18 @@ const vault = "0x1111111111111111111111111111111111111111";
 const owner = "0x2222222222222222222222222222222222222222";
 const runtimeBytecodeHash = `0x${"ab".repeat(32)}`;
 
+function pendingMainnet() {
+  return parseDeploymentManifest({
+    ...mainnetJson,
+    status: "pending",
+    vaultAddress: null,
+    deploymentBlock: null,
+    runtimeBytecodeHash: null,
+    owner: { kind: "smart-wallet", address: null },
+    expectedCreationPaused: null,
+  });
+}
+
 function activeMainnet(): DeploymentManifest {
   return parseDeploymentManifest({
     ...mainnetJson,
@@ -56,7 +68,7 @@ describe("deployment manifest parsing", () => {
   });
 
   it("requires every deployment field once a manifest is no longer pending", () => {
-    expect(() => parseDeploymentManifest({ ...mainnetJson, status: "active" })).toThrow(
+    expect(() => parseDeploymentManifest({ ...pendingMainnet(), status: "active" })).toThrow(
       "requires a vault, block, runtime hash, and owner",
     );
   });
@@ -74,12 +86,19 @@ describe("deployment manifest parsing", () => {
     ).toThrow("must be unique");
   });
 
-  it("requires a Safe owner and paused launch on Base mainnet", () => {
+  it("accepts an explicitly recorded smart-wallet owner on mainnet", () => {
+    expect(
+      parseDeploymentManifest({ ...activeMainnet(), owner: { kind: "smart-wallet", address: owner } }).owner
+        .kind,
+    ).toBe("smart-wallet");
+  });
+
+  it("requires a Safe or smart-wallet owner and paused launch on Base mainnet", () => {
     expect(() =>
-      parseDeploymentManifest({ ...mainnetJson, owner: { kind: "test-safe", address: null } }),
-    ).toThrow("Safe owner and paused launch");
+      parseDeploymentManifest({ ...pendingMainnet(), owner: { kind: "test-safe", address: null } }),
+    ).toThrow("Safe or smart-wallet owner and paused launch");
     expect(() => parseDeploymentManifest({ ...mainnetJson, startPaused: false })).toThrow(
-      "Safe owner and paused launch",
+      "Safe or smart-wallet owner and paused launch",
     );
   });
 
@@ -140,7 +159,9 @@ describe("manifest lookup", () => {
   });
 
   it("refuses a pending manifest as active and narrows an active one", () => {
-    expect(() => activeManifestForChain(8453)).toThrow("no active checked deployment manifest");
+    expect(() => activeManifestForChain(8453, { 8453: pendingMainnet() })).toThrow(
+      "no active checked deployment manifest",
+    );
     const active = activeManifestForChain(8453, { 8453: activeMainnet() });
     expect(active.vaultAddress).toBe(vault);
     expect(active.owner.address).toBe(owner);
@@ -152,8 +173,8 @@ describe("manifest lookup", () => {
     expect(() => activeManifestFromEnvironment({ SOWMORROW_DEPLOYMENT_CHAIN_ID: "31337" })).toThrow(
       "must select Base mainnet or Base Sepolia",
     );
-    expect(() => activeManifestFromEnvironment({ SOWMORROW_DEPLOYMENT_CHAIN_ID: "8453" })).toThrow(
-      "no active checked deployment manifest",
+    expect(activeManifestFromEnvironment({ SOWMORROW_DEPLOYMENT_CHAIN_ID: "8453" }).vaultAddress).toBe(
+      mainnetJson.vaultAddress,
     );
   });
 

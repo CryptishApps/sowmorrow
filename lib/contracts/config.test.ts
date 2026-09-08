@@ -1,3 +1,4 @@
+import mainnetJson from "../../contracts/deployments/base-mainnet-8453.json";
 import { describe, expect, it } from "vitest";
 import { base, baseSepolia } from "viem/chains";
 import { stocks } from "@/lib/stocks";
@@ -36,18 +37,30 @@ describe("manifest-backed public deployment configuration", () => {
     const deployment = parseAppDeployment({});
     expect(deployment.chainId).toBe(base.id);
     expect(deployment.writesEnabled).toBe(false);
-    expect(deployment.vaultAddress).toBeNull();
-    expect(deployment.deploymentBlock).toBeNull();
+    expect(deployment.vaultAddress).toBe(mainnetJson.vaultAddress);
+    expect(deployment.deploymentBlock).toBe(mainnetJson.deploymentBlock);
     expect(Object.keys(deployment.stockAddresses)).toHaveLength(13);
   });
 
   it("cannot enable writes while the checked manifest is pending", () => {
     expect(() =>
-      parseAppDeployment({
-        NEXT_PUBLIC_SOWMORROW_CHAIN_ID: String(base.id),
-        NEXT_PUBLIC_SOWMORROW_WRITES_ENABLED: "true",
-        NEXT_PUBLIC_SOWMORROW_MAINNET_RELEASED: "true",
-      }),
+      parseAppDeployment(
+        {
+          NEXT_PUBLIC_SOWMORROW_CHAIN_ID: String(base.id),
+          NEXT_PUBLIC_SOWMORROW_WRITES_ENABLED: "true",
+          NEXT_PUBLIC_SOWMORROW_MAINNET_RELEASED: "true",
+        },
+        registry(
+          activeManifest({
+            status: "pending",
+            vaultAddress: null,
+            deploymentBlock: null,
+            runtimeBytecodeHash: null,
+            owner: { kind: "smart-wallet", address: null },
+            expectedCreationPaused: null,
+          }),
+        ),
+      ),
     ).toThrow(/active manifest/i);
   });
 

@@ -19,6 +19,8 @@ import type * as gifts from "../gifts.js";
 import type * as http from "../http.js";
 import type * as indexer from "../indexer.js";
 import type * as monitor from "../monitor.js";
+import type * as monitorAlerts from "../monitorAlerts.js";
+import type * as noteIntegrity from "../noteIntegrity.js";
 import type * as notes from "../notes.js";
 import type * as observability from "../observability.js";
 import type * as reconciliation from "../reconciliation.js";
@@ -40,6 +42,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   indexer: typeof indexer;
   monitor: typeof monitor;
+  monitorAlerts: typeof monitorAlerts;
+  noteIntegrity: typeof noteIntegrity;
   notes: typeof notes;
   observability: typeof observability;
   reconciliation: typeof reconciliation;

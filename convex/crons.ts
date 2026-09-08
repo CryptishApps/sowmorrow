@@ -17,9 +17,9 @@ crons.interval(
   internal.discovery.scanFactoryCandidates,
 );
 
-crons.daily(
+crons.interval(
   "check vault solvency and index lag",
-  { hourUTC: 3, minuteUTC: 0 },
+  { minutes: 5 },
   internal.monitor.checkVaultSolvencyAndLag,
 );
 

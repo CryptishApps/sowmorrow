@@ -68,6 +68,18 @@ contract DeploySowmorrowSafeTest is Test {
         return address(new MockSafe(threshold, owners));
     }
 
+    function test_requireMainnetOwner_acceptsExplicitSmartWallet() public {
+        deployment.requireMainnetOwner(address(new NotASafe()), "smart-wallet");
+    }
+
+    function test_requireMainnetOwner_rejectsEoaAndUnknownPolicy() public {
+        vm.expectRevert();
+        deployment.requireMainnetOwner(signerOne, "smart-wallet");
+        address safeOwner = _safe(2, _signers(3));
+        vm.expectRevert(DeploySowmorrow.InvalidOwnerKind.selector);
+        deployment.requireMainnetOwner(safeOwner, "unknown");
+    }
+
     function test_requireReviewedSafe_acceptsTwoOfThree() public {
         deployment.requireReviewedSafe(_safe(2, _signers(3)));
     }
@@ -151,6 +163,7 @@ contract DeploySowmorrowSafeTest is Test {
     /// @dev `vm.setEnv` mutates the shared process environment, so every `run()` scenario lives in a
     ///      single sequential test rather than racing sibling tests in the same suite.
     function test_run_rejectsEveryMisconfiguredMainnetOwner() public {
+        vm.setEnv("SOWMORROW_OWNER_KIND", "safe");
         vm.chainId(1);
         vm.setEnv("SOWMORROW_OWNER", vm.toString(makeAddr("owner")));
         vm.setEnv("SOWMORROW_START_PAUSED", "false");

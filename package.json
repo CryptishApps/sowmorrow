@@ -23,7 +23,7 @@
     "test:e2e": "playwright test",
     "pretest:e2e:a11y": "node scripts/build-profile.mjs preview",
     "test:e2e:a11y": "playwright test --grep \"has no automatically detectable accessibility violations\"",
-    "format:check": "prettier --check .github app components convex data e2e lib scripts docs README.md contracts/README.md contracts/deployments/*.json contracts/toolchain.lock.json eslint.config.mjs package.json playwright.config.ts playwright.enabled.config.ts tsconfig.json vitest.config.mts wagmi.config.ts",
+    "format:check": "prettier --check .github app components convex data e2e lib scripts docs README.md contracts/README.md contracts/deployments/*.json contracts/toolchain.lock.json eslint.config.mjs package.json playwright.config.ts playwright.enabled.config.ts tsconfig.json vitest.config.mts wagmi.config.ts proxy.ts next.config.ts instrumentation-client.ts",
     "contracts:build": "forge build --root contracts",
     "contracts:test": "forge test --root contracts -vvv",
     "contracts:test:native": "./scripts/contracts/test-native.sh",
@@ -44,7 +44,8 @@
     "verify:release": "npm run verify && npm run contracts:check-network",
     "build:sepolia": "node scripts/build-profile.mjs sepolia",
     "pretest:e2e:enabled": "node scripts/build-profile.mjs e2e-enabled",
-    "test:e2e:enabled": "playwright test --config playwright.enabled.config.ts"
+    "test:e2e:enabled": "playwright test --config playwright.enabled.config.ts",
+    "contracts:manifest:mainnet": "tsx scripts/contracts/mainnet-manifest-from-broadcast.ts"
   },
   "dependencies": {
     "@coinbase/wallet-sdk": "4.3.6",

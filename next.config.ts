@@ -5,11 +5,6 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
   },
-  {
-    key: "Content-Security-Policy-Report-Only",
-    value:
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://keys.coinbase.com; object-src 'none'; base-uri 'self'; form-action 'self'",
-  },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "no-referrer" },

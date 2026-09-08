@@ -19,6 +19,19 @@ const abi = [...sowmorrowVaultAbi, ...ib20Abi, ...ib20AssetAbi, ...multicall3Abi
 
 for (const wallet of ["Coinbase Wallet", "MetaMask"]) {
   test(`${wallet} connects, approves, plants, and claims through the shared gift page`, async ({ page }) => {
+    const violations: string[] = [];
+    await page.exposeFunction("recordCspViolation", (directive: string) => violations.push(directive));
+    await page.addInitScript(() => {
+      document.addEventListener("securitypolicyviolation", (event) => {
+        (window as unknown as { recordCspViolation: (directive: string) => void }).recordCspViolation(
+          JSON.stringify({
+            directive: event.violatedDirective,
+            blockedURI: event.blockedURI,
+            sourceFile: event.sourceFile,
+          }),
+        );
+      });
+    });
     let allowance = 0n;
     let amount = 0n;
     let unlockAt = 0n;
@@ -273,5 +286,6 @@ for (const wallet of ["Coinbase Wallet", "MetaMask"]) {
     await page.getByRole("button", { name: "Claim 1 selected gift" }).click();
     await expect(page.getByText(/Claimed safely to this wallet|already claimed/i).first()).toBeVisible();
     expect(writes).toEqual(["approve", "createGift", "claim"]);
+    expect(violations).toEqual([]);
   });
 }

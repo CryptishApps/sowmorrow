@@ -36,7 +36,7 @@ const deploymentManifestSchema = z
     runtimeBytecodeHash: runtimeHashSchema.nullable(),
     owner: z
       .object({
-        kind: z.enum(["safe", "test-safe", "test-eoa", "local-eoa"]),
+        kind: z.enum(["safe", "smart-wallet", "test-safe", "test-eoa", "local-eoa"]),
         address: addressSchema.nullable(),
       })
       .strict(),
@@ -80,8 +80,8 @@ export function parseDeploymentManifest(input: unknown): DeploymentManifest {
   }
 
   if (manifest.chainId === 8453) {
-    if (manifest.owner.kind !== "safe" || !manifest.startPaused) {
-      throw new Error("Base mainnet requires a Safe owner and paused launch");
+    if ((manifest.owner.kind !== "safe" && manifest.owner.kind !== "smart-wallet") || !manifest.startPaused) {
+      throw new Error("Base mainnet requires a Safe or smart-wallet owner and paused launch");
     }
     if (manifest.catalogAddressSetSha256 !== stockCatalogEvidence.addressSetSha256) {
       throw new Error("Base mainnet manifest catalog evidence is stale");

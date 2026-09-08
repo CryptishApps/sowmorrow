@@ -16,9 +16,6 @@ interface ISafeSignerPolicy {
 
 /// @title DeploySowmorrow
 /// @notice Deploys `SowmorrowVault` for the selected chain.
-/// @dev On Base mainnet the owner must be a deployed Safe with a reviewed signer policy: at least
-///      three owners and a threshold of at least two, with no duplicate or zero owner. The checks
-///      run before the broadcast so a misconfigured ceremony never produces a transaction.
 contract DeploySowmorrow is Script {
     /// @notice Minimum number of Safe signatures required for the mainnet owner.
     uint256 public constant MINIMUM_OWNER_THRESHOLD = 2;
@@ -26,6 +23,7 @@ contract DeploySowmorrow is Script {
     /// @notice Minimum size of the mainnet owner's Safe signer set.
     uint256 public constant MINIMUM_OWNER_SIGNERS = 3;
 
+    error InvalidOwnerKind();
     error UnsupportedChain(uint256 chainId);
     error MainnetMustStartPaused();
     error MainnetOwnerMustBeContract(address owner);
@@ -54,7 +52,7 @@ contract DeploySowmorrow is Script {
 
         if (block.chainid == 8453) {
             if (!startPaused) revert MainnetMustStartPaused();
-            requireReviewedSafe(owner);
+            requireMainnetOwner(owner, vm.envOr("SOWMORROW_OWNER_KIND", string("safe")));
             stocks = ReviewedStocks.mainnet();
             minGiftAmountsRaw = reviewedMinGiftAmountsRaw();
         } else if (block.chainid == 84532 || block.chainid == 31337) {
@@ -106,6 +104,16 @@ contract DeploySowmorrow is Script {
         amounts[10] = sndkc;
         amounts[11] = spcxc;
         amounts[12] = tslac;
+    }
+
+    function requireMainnetOwner(address owner, string memory kind) public view {
+        if (keccak256(bytes(kind)) == keccak256("safe")) {
+            requireReviewedSafe(owner);
+        } else if (keccak256(bytes(kind)) == keccak256("smart-wallet")) {
+            if (owner.code.length == 0) revert MainnetOwnerMustBeContract(owner);
+        } else {
+            revert InvalidOwnerKind();
+        }
     }
 
     /// @notice Reverts unless `owner` answers the Safe signer-policy API with a reviewed configuration.
