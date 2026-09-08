@@ -80,17 +80,17 @@ Every six hours `discovery:scanFactoryCandidates` reads B20 factory creations an
 
 The reconciler keeps up to 64 block checkpoints on its cursor. On a reorg it walks back to the newest checkpoint that still matches the chain, orphans every event above it, rebuilds affected gift projections, and continues. It halts only when no checkpoint survives, recording `failureCode: "reorg_beyond_checkpoints"` in `syncRuns`.
 
-To resume, use a canonical stored checkpoint. If none survives, use the block immediately before the reviewed manifest deployment block to replay the full vault history. Verify the block hash independently before running:
+To resume, pick a checkpoint that is still canonical and run:
 
 ```sh
-npx convex run reconciliation:repairHaltedCursor '{"resetToBlock": <block>, "resetToBlockHashLower": "<0x hash>", "operator": "<operator id>"}'
+npx convex run reconciliation:repairHaltedCursor '{"resetToBlock": <block>, "resetToBlockHashLower": "<0x hash>", "operator": "<operator id>", "now": <unix ms>}'
 ```
 
-The action re-reads the block hash from the primary RPC before resetting. It refuses an active cursor, a block that is neither a stored checkpoint nor the deployment boundary, or a hash that does not match. Cleanup runs while halted. If the result is `cleanup_pending`, repeat the same command until it returns `resumed`; it does not skip remaining cleanup. A partial repair records its earliest cleanup boundary; changing to a later boundary returns `repair_boundary_conflict`. Continue from the recorded boundary or an earlier one. Concurrent cleanup cannot orphan records after the cursor resumes. The ordinary reconciler then rebuilds history from the selected boundary. Keep the mirror marked as catching up until it reaches the safe head. The repair is written to `syncRuns` as an `operator-repair` run.
+The action re-reads the block hash from the primary RPC before resetting. It refuses an active cursor, a block that is not a stored checkpoint, or a hash that does not match. The repair is written to `syncRuns` as an `operator-repair` run.
 
 ## Daily signals
 
-`monitor:checkVaultSolvencyAndLag` runs at 03:00 UTC. It records per-stock health signals and fails the run on insolvency, incomplete reads or coverage, RPC failure, or excessive index lag. Liability and balance reads use the same safe block. The optional alert receiver is called for degraded results. This daily schedule is not continuous incident detection. Nothing in the mirror can repair insolvency; it is an incident for the vault owner and the issuer.
+`monitor:checkVaultSolvencyAndLag` runs at 03:00 UTC and writes one `syncRuns` row with a signal of `healthy`, `insolvent` (a stock whose `totalEscrowed` exceeds the vault balance, which only an issuer seizure can cause), `provider_split` (primary and secondary RPC disagree on the safe head), or an RPC failure code. Nothing in the mirror can repair insolvency; it is an incident for the vault owner and the issuer.
 
 `retention:pruneTerminalRecords` runs at 04:00 UTC and deletes terminal webhook deliveries and sync runs older than `SOWMORROW_RETENTION_DAYS` (default 30).
 
@@ -105,23 +105,3 @@ Set these with `npx convex env set`, never as `NEXT_PUBLIC_` values:
 - `SOWMORROW_INDEXER_ENABLED` (gates historical range backfill only; tip promotion, orphaning, and reorg rewind run whenever a deployment is configured)
 - `SOWMORROW_RETENTION_DAYS`
 - `SOWMORROW_B20_FACTORY_START_BLOCK` (optional; discovery start, defaults to the manifest deployment block)
-
-## Release profiles and wallet checks
-
-`npm run build:sepolia` loads the local environment, forces Base Sepolia writes on and mainnet release off, and requires a Convex URL. Use the intended public backend and browser-safe RPC credentials when building on the hosting platform. This command builds only; it does not publish.
-
-`npm run test:e2e` builds an explicit mirror-free preview. `npm run test:e2e:enabled` builds a separate Sepolia profile and exercises the Coinbase SDK and targeted MetaMask connector against test wallet providers and intercepted RPC responses. Neither signs a real transaction. Before publishing, verify MetaMask and Coinbase extension/mobile/smart-wallet connections with real wallets on Sepolia.
-
-Set `NEXT_PUBLIC_BUILDER_CODE` to the actual registered Builder Code before the release build. The app appends an ERC-8021 suffix to approval, planting, and claim requests. Leaving it empty adds no attribution. Check the submitted transaction data, including the execution call when using a smart account.
-
-## Alert delivery
-
-The monitor includes manifest stocks, verified/retired catalog stocks, and every distinct stock present in gift history. It reads balances and liabilities at the same safe block. Missing coverage, unreadable assets, insolvency, or excessive lag mark the run failed.
-
-Configure `SOWMORROW_MONITOR_WEBHOOK_URL` with an HTTPS JSON webhook receiver and optionally `SOWMORROW_MONITOR_WEBHOOK_SECRET` for Bearer authentication. The receiver must route the JSON to the intended operator notification channel and return a 2xx status. `SOWMORROW_MONITOR_MAX_LAG_BLOCKS` defaults to 1800. Failed delivery is returned as `alertDelivery: "failed"`; absent configuration returns `not_configured`. Test the receiver and notification delivery before launch. These values are server-only and must never use a `NEXT_PUBLIC_` prefix.
-
-The existing CDP event webhook is separate from operator alert delivery. A polling-only release is supported when range indexing is enabled; signed event delivery and secondary-provider agreement still require their own operational tests.
-
-## Browser policy rollout
-
-Framing, objects, base URLs, and form destinations are restricted by the enforced CSP. Script, style, frame, and connection restrictions are initially report-only. Review violations for the actual RPC, Convex, MetaMask, and Coinbase deployment, configure reporting, then deploy and test a nonce-based script policy before enforcing it. Report-only policy is diagnostic and does not prevent script execution.
