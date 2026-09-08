@@ -36,13 +36,8 @@ contract DeploySowmorrow is Script {
     error TestEnvironmentNeedsStockFixtures();
     error TestEnvironmentStockAndMinAmountCountMismatch(uint256 stocksLength, uint256 minAmountsLength);
 
-    /// @notice Per-share raw-unit minimum for a reviewed stock trading above roughly $200 at review
-    ///         time: 0.01 shares at 1e18 precision.
-    uint256 public constant MIN_GIFT_HIGH_PRICE_STOCK_RAW = 0.01 ether;
-
-    /// @notice Per-share raw-unit minimum for a reviewed stock trading below roughly $200 at review
-    ///         time: 0.2 shares at 1e18 precision.
-    uint256 public constant MIN_GIFT_LOW_PRICE_STOCK_RAW = 0.2 ether;
+    uint256 public constant MIN_GIFT_HIGH_PRICE_STOCK_RAW = 1_000_000;
+    uint256 public constant MIN_GIFT_LOW_PRICE_STOCK_RAW = 20_000_000;
 
     function run() external returns (SowmorrowVault vault) {
         address owner = vm.envAddress("SOWMORROW_OWNER");

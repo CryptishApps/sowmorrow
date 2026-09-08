@@ -23,7 +23,9 @@ it("binds the CREATE2 address and calldata to a paused vault with the selected o
   );
   expect(args[0]).toBe(owner);
   expect(args[1]).toEqual(stocks.map((s) => s.mainnetAddress));
-  expect(args[2]).toHaveLength(stocks.length);
+  expect(args[2]).toEqual(
+    stocks.map((stock) => (stock.symbol === "INTCc" || stock.symbol === "SNDKc" ? 20_000_000n : 1_000_000n)),
+  );
   expect(args[3]).toBe(true);
 });
 describe("deployment inputs", () => {

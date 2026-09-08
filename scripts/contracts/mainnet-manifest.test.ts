@@ -114,9 +114,10 @@ describe("mainnet deployment evidence", () => {
     const request = prepareFactoryDeployment(creationCode, owner);
     const read = client.readContract.getMockImplementation()!;
     client.readContract.mockImplementation(async (args) =>
-      args.functionName === "minGiftAmountRaw" &&
-      [stocks[5].mainnetAddress, stocks[10].mainnetAddress].includes(args.args[0])
-        ? 2n * 10n ** 17n
+      args.functionName === "minGiftAmountRaw"
+        ? [stocks[5].mainnetAddress, stocks[10].mainnetAddress].includes(args.args[0])
+          ? 20_000_000n
+          : 1_000_000n
         : read(args),
     );
 

@@ -21,7 +21,7 @@
       "officialName": "Apple Inc.",
       "displayName": "Apple",
       "address": "0xb200000000000000000000C2e324d24d7eEcd1fb",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 210
     },
     {
@@ -29,7 +29,7 @@
       "officialName": "Amazon.com Inc.",
       "displayName": "Amazon",
       "address": "0xb200000000000000000000d9192b6B456483C2E8",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 35
     },
     {
@@ -37,7 +37,7 @@
       "officialName": "Coinbase Global Inc.",
       "displayName": "Coinbase",
       "address": "0xb200000000000000000000c85a31389D71F3ecfb",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 225
     },
     {
@@ -45,7 +45,7 @@
       "officialName": "Circle Internet Group Inc.",
       "displayName": "Circle",
       "address": "0xB20000000000000000000019f6E7C675b73C2e4D",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 196
     },
     {
@@ -53,7 +53,7 @@
       "officialName": "Alphabet Inc.",
       "displayName": "Alphabet",
       "address": "0xb2000000000000000000002D0BA3164cc74f58B7",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 50
     },
     {
@@ -61,7 +61,7 @@
       "officialName": "Intel Corporation",
       "displayName": "Intel",
       "address": "0xB2000000000000000000004AFF16039bA04bdFBc",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 205
     },
     {
@@ -69,7 +69,7 @@
       "officialName": "Meta Platforms Inc.",
       "displayName": "Meta",
       "address": "0xb2000000000000000000008bC8786B856E61707C",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 238
     },
     {
@@ -77,7 +77,7 @@
       "officialName": "Microsoft Corporation",
       "displayName": "Microsoft",
       "address": "0xB200000000000000000000Ab99cFa739E253872B",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 200
     },
     {
@@ -85,7 +85,7 @@
       "officialName": "Strategy Inc.",
       "displayName": "Strategy",
       "address": "0xb2000000000000000000004884b426556b92883d",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 9
     },
     {
@@ -93,7 +93,7 @@
       "officialName": "NVIDIA Corporation",
       "displayName": "NVIDIA",
       "address": "0xb20000000000000000000078ee7ce2fE4908108C",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 120
     },
     {
@@ -101,7 +101,7 @@
       "officialName": "Sandisk Corporation",
       "displayName": "Sandisk",
       "address": "0xb200000000000000000000397293Cb8cda9a10c5",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 347
     },
     {
@@ -109,7 +109,7 @@
       "officialName": "Space Exploration Technologies Corp.",
       "displayName": "SpaceX",
       "address": "0xb2000000000000000000007b9fcbd005511aCBd5",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 222
     },
     {
@@ -117,7 +117,7 @@
       "officialName": "Tesla Inc.",
       "displayName": "Tesla",
       "address": "0xb2000000000000000000001e800a7f5189430cD0",
-      "decimals": 18,
+      "decimals": 8,
       "hue": 0
     }
   ]

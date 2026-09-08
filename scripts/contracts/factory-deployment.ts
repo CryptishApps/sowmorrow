@@ -6,6 +6,7 @@ import {
   isHex,
   keccak256,
   parseAbiParameters,
+  parseUnits,
   size,
   stringToHex,
   zeroAddress,
@@ -22,7 +23,7 @@ export function prepareFactoryDeployment(creationCode: Hex, selectedOwner: Addre
   if (owner === zeroAddress || !isHex(creationCode) || size(creationCode) === 0)
     throw new Error("A nonzero owner and compiled creation code are required");
   const minimums = stocks.map((stock) =>
-    stock.symbol === "INTCc" || stock.symbol === "SNDKc" ? 2n * 10n ** 17n : 10n ** 16n,
+    parseUnits(stock.symbol === "INTCc" || stock.symbol === "SNDKc" ? "0.2" : "0.01", stock.decimals),
   );
   const initCode = concat([
     creationCode,

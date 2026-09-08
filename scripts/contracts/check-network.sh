@@ -53,6 +53,14 @@ while IFS= read -r stock_address; do
   is_initialized="$(cast call --json --rpc-url "$rpc_url" "$b20_factory" 'isB20Initialized(address)(bool)' "$stock_address" | jq -r '.[0] | tostring')"
   precision="$(cast call --json --rpc-url "$rpc_url" "$stock_address" 'WAD_PRECISION()(uint256)' | jq -r '.[0]')"
   multiplier="$(cast call --json --rpc-url "$rpc_url" "$stock_address" 'multiplier()(uint256)' | jq -r '.[0]')"
+  if [[ "$requested_network" == "base-mainnet" ]]; then
+    expected_decimals="$(jq -r --arg address "$stock_address" '.stocks[] | select(.address == $address) | .decimals' "$repository_root/data/reviewed-stock-catalog.base-mainnet.json")"
+    actual_decimals="$(cast call --json --rpc-url "$rpc_url" "$stock_address" 'decimals()(uint8)' | jq -r '.[0]')"
+    if [[ "$actual_decimals" != "$expected_decimals" ]]; then
+      echo "Token precision mismatch for $stock_address" >&2
+      exit 1
+    fi
+  fi
   if [[ "$is_b20" != "true" || "$is_initialized" != "true" || "$precision" != "1000000000000000000" || "$multiplier" == "0" ]]; then
     echo "B20 validation failed for $stock_address" >&2
     exit 1
@@ -92,6 +100,18 @@ if [[ -n "$vault_address" ]]; then
     fi
   fi
   while IFS= read -r stock_address; do
+    if [[ "$requested_network" == "base-mainnet" ]]; then
+      symbol="$(jq -r --arg address "$stock_address" '.stocks[] | select(.address == $address) | .symbol' "$manifest_path")"
+      case "$symbol" in
+        INTCc|SNDKc) expected_minimum="20000000" ;;
+        *) expected_minimum="1000000" ;;
+      esac
+      actual_minimum="$(cast call --json --rpc-url "$rpc_url" "$vault_address" 'minGiftAmountRaw(address)(uint256)' "$stock_address" | jq -r '.[0]')"
+      if [[ "$actual_minimum" != "$expected_minimum" ]]; then
+        echo "Gift minimum does not match the reviewed launch amount for $symbol" >&2
+        exit 1
+      fi
+    fi
     supported="$(cast call --json --rpc-url "$rpc_url" "$vault_address" 'supportedStock(address)(bool)' "$stock_address" | jq -r '.[0] | tostring')"
     if [[ "$supported" != "true" ]]; then
       echo "The vault does not support manifest stock $stock_address" >&2
